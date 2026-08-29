@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Users, ScanLine, ClipboardList, Plus, Trash2, Download, Loader2, Check, X, AlertTriangle, Upload, Pencil, RotateCcw, CloudOff } from "lucide-react";
-import { authReady, loadRoster, saveRoster, watchRoster } from "./firebase";
+import { loadRoster, saveRoster, watchRoster } from "./firebase";
 
 const DEFAULT_ROSTER = [
   ["م. محمد بن عبد الله العقل", "مساعد الأمين للقطاعات البلدية"],
@@ -112,18 +112,18 @@ export default function App() {
   const [overrides, setOverrides] = useState({});
 
   useEffect(() => {
+    // Show UI immediately with default roster — Firebase loads in background
+    setLoaded(true);
     let unsub = () => {};
     (async () => {
       try {
-        await authReady;
         const items = await loadRoster();
         if (items && items.length) setRoster(items);
         else await saveRoster(DEFAULT_ROSTER);
         unsub = watchRoster((its) => { if (its && its.length) setRoster(its); });
       } catch (e) {
-        setOffline(true); // Firebase not configured — fall back to local default
+        setOffline(true);
       }
-      setLoaded(true);
     })();
     return () => unsub();
   }, []);
