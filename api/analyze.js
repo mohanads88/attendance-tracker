@@ -50,9 +50,9 @@ ${rosterText}`;
     });
     const data = await gr.json();
     if (!gr.ok) {
-      return res.status(502).json({ error: "خطأ من خدمة Gemini", detail: data?.error?.message || "" });
-    }
-
+  console.error("Gemini error:", JSON.stringify(data));
+  return res.status(502).json({ error: "خطأ من خدمة Gemini", detail: data?.error?.message || JSON.stringify(data) });
+}
     const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim();
     const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
     const s = clean.indexOf("{");
