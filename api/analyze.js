@@ -40,7 +40,7 @@ ${rosterText}`;
     };
 
     // Model id can change over time; swap here if Google renames it.
-    const MODEL = "gemini-2.5-flash";
+    const MODEL = "gemini-2.5-flash-preview-05-20";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;
 
     const gr = await fetch(url, {
