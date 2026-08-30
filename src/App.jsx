@@ -70,7 +70,7 @@ const C={
 };
 const FONT=`'Tajawal', system-ui, sans-serif`;
 
-function downscale(file,maxDim=1400,quality=0.85){
+function downscale(file,maxDim=1200,quality=0.78){
   return new Promise((resolve,reject)=>{
     const img=new Image(),url=URL.createObjectURL(file);
     img.onload=()=>{
@@ -325,7 +325,7 @@ function PeriodCard({state,setState,roster,previousPresent}){
       const r=await analyzePeriod(state.images,roster,previousPresent);
       setState(s=>({...s,...r,resolved:{},analyzing:false,analyzed:true}));
     }catch(e){
-      setState(s=>({...s,analyzing:false,error:e.message||"حدث خطأ"}));
+      setState(s=>({...s,analyzing:false,error:e.message||"فشل التحليل — تحقق من عدد اللقطات أو اتصالك بالإنترنت"}));
     }
   };
   const removeImage=i=>setState(s=>({...s,images:s.images.filter((_,idx)=>idx!==i)}));
