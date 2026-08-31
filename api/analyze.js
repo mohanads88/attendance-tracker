@@ -19,66 +19,100 @@ export default async function handler(req, res) {
     }
 
     const prevSection = Array.isArray(previousPresent) && previousPresent.length > 0
-      ? `\n## الفترة الأولى (مرجع)\nهؤلاء تأكّد حضورهم في الفترة الأولى — إذا ظهروا مجدداً أكّدهم مباشرة:\n${previousPresent.map(p => `- رقم ${p.num}: "${p.rawName}"`).join("\n")}\n`
+      ? `\n## الفترة الأولى (مرجع)\nهؤلاء تأكّد حضورهم مسبقاً — إذا ظهروا مجدداً أكّدهم مباشرة:\n${previousPresent.map(p => `- رقم ${p.num}: "${p.rawName}"`).join("\n")}\n`
       : "";
 
     const instruction = `أنت خبير في مطابقة أسماء المشاركين في اجتماعات Webex/Teams مع قوائم المدعوين.
 
-## قاعدة المطابقة الأساسية — اسم العائلة أولاً
-**المعيار الأول والأهم هو اسم العائلة (اللقب)**، وليس الاسم الأول.
-- "Bander Alkatheri" → ابحث عمن لقبه "الكثيري" في القائمة (= بندر الكثيري)، وليس كل من اسمه "بندر"
-- "Bander Alharbi" → ابحث عمن لقبه "الحربي" (= بندر الحربي)
-- "Mohammed Alqahtani" → ابحث عمن لقبه "القحطاني" — قد يكون أكثر من شخص فتضعه uncertain
-- "zamil alshammari" → لقبه "الشمري" = زامل الشمري
-- "Turkii" → اسم أول فقط بلا لقب → uncertain إن كان هناك أكثر من تركي، مؤكد إن كان واحداً
+## مبدأ المطابقة الأساسي: الاسم الكامل يُحسم — الاسم الجزئي يُشكّك
 
-## جدول التحويل الصوتي للألقاب (اسم العائلة)
-Alkatheri=الكثيري، Alharbi=الحربي، Alrowaily/Alruwaily=الرويلي، Alaqeel=العقيل، Alhunaidi=الحنيدي، 
-Aldalbahi/Aldlbahi=الدلبحي، Alomari=العميري، Alqahtani=القحطاني، Alaqeel=العقيل،
-Alsaiari/Alsayari=السياري، Almadhi/Almaathy=الماضي، Aldalbahi=الدلبحي، Alomiri/Alomeri=العميري،
-Alaqeel=العقيل، Alnassar/Alnasser=النصار، Alzahrani=الزهراني، Alkriidis/Alkreidis=الكريديس،
+**الخطوة الأولى دائماً: اجمع كل أجزاء الاسم معاً**
+الاسم الكامل يتكوّن من: الاسم الأول + الاسم الأوسط (إن وُجد) + اسم العائلة (اللقب).
+جميع هذه الأجزاء مجتمعة هي ما يُحدّد الشخص، وليس جزء واحد منها.
+
+**قرار المطابقة بالترتيب:**
+
+١. **ابحث بالاسم الكامل أولاً**
+   - حوّل كل جزء من الاسم الظاهر إلى مقابله العربي
+   - ابحث في القائمة عمن تتطابق معه أكبر عدد من أجزاء اسمه
+   - إن وجدت شخصاً واحداً فقط تطابقت معه → **confident: true**
+   - مثال: "Bander Alkatheri" = بندر + الكثيري → بندر عبد العزيز الكثيري (رقم 52) ✓ مؤكد
+   - مثال: "zamil alshammari" = زامل + الشمري → زامل عوض الشمري (رقم 39) ✓ مؤكد
+   - مثال: "Mohammed Alrabiah" = محمد + الربيعة → محمد بن عبد الله الربيعة (رقم 3) ✓ مؤكد
+
+٢. **إن تطابق اسم العائلة مع شخص واحد فقط → confident: true**
+   - حتى لو الاسم الأول مختصر أو مختلف قليلاً
+   - مثال: "خالد الذييب" → الذييب موجود لدى شخص واحد فقط في القائمة (رقم 26) ✓ مؤكد
+
+٣. **إن تطابق اسم العائلة مع أكثر من شخص → uncertain**
+   - مثال: "محمد القحطاني" → القحطاني موجود عند رقم 13 ورقم 24 ورقم 43
+   - أدرج كل الاحتمالات في possibleMatches مع سبب كل احتمال
+
+٤. **إن ظهر اسم أول فقط بلا عائلة**
+   - إن كان الاسم فريداً في القائمة → confident: true
+   - إن كان مشتركاً → uncertain مع كل الاحتمالات
+
+٥. **إن لم يطابق أي شخص في القائمة → outOfList**
+
+## جدول التحويل الصوتي — الألقاب (اسم العائلة)
+Alkatheri=الكثيري، Alharbi=الحربي، Alrowaily/Alruwaily=الرويلي،
+Alaqeel=العقيل، Aldalbahi/Aldlbahi=الدلبحي، Alomiri/Alomeri/Alomari=العميري،
+Alqahtani=القحطاني، Alsaiari/Alsayari/Alsiyari=السياري، Almadhi/Almaathy=الماضي،
+Alnassar/Alnasser=النصار، Alzahrani=الزهراني، Alkreidis/Alkriidis=الكريديس،
 Alsuwailem/Alsuwayylem=السويلم، Alanazi/Alenazi=العنزي، Albaker/Albakar=البكر،
-Altlasi/Althalasi=الطلاسي، Alajlan/Alajlaan=العجلان، Aldhayib/Aldhyib=الذييب،
-Alfaqih/Faqih=فقيه، Alasmari=الأسمري، Aldosari/Aldossari=الدوسري، Alsabiee/Alsobiee=السبيعي،
-Alfahd=الفهد، Alotaibi/Alataibi=العتيبي، Karhaan/Karhan=كرحان، Alshammari=الشمري،
-Alyousif/Alyousef=اليوسف، Alissa/Aleisa=العيسى، Barkati/Barkati=بركاتي، Bawazer/Bawazeer=باوزير،
-Ateeq/Atiq=عتيق، Almutairi/Almutair=المطيري، Albarrak=البراك، Alnassian/Alnasian=النصيان،
-Alruwaili/Alrowaily=الرويلي، Alkhlaifi/Alkhulaifi=الكثيري، Alkatheri=الكثيري،
-Aldagfaq/Aldaghfaq=الدغفق، Alghamdi=الغامدي
+Altlasi/Althalasi=الطلاسي، Alajlan/Alajlaan=العجلان، Aldhayib/Aldhyib/Aldhiib=الذييب،
+Faqih/Alfaqih=فقيه، Alasmari=الأسمري، Aldosari/Aldossari=الدوسري،
+Alsabiee/Alsobiee/Alsabyee=السبيعي، Alfahd=الفهد، Alotaibi/Alataibi/Alotaybi=العتيبي،
+Karhaan/Karhan/Karkhan=كرحان، Alshammari/Alshammary=الشمري،
+Alyousif/Alyousef/Alyousuf=اليوسف، Alissa/Aleisa/Aleissa=العيسى،
+Barkati/Barkati=بركاتي، Bawazer/Bawazeer/Bawazeir=باوزير،
+Ateeq/Atiq/Ateiq=عتيق، Almutairi/Almutair/Almutairy=المطيري،
+Albarrak/Albarakat=البراك، Alnassian/Alnasian/Alnasyan=النصيان،
+Aldagfaq/Aldaghfaq/Aldughfaq=الدغفق، Alghamdi/Alghaamdi=الغامدي،
+Alsabiee/Alsabiei=السبيعي، Alrabiah/Alrabea/Alrabia=الربيعة،
+Alzahrani=الزهراني، Alwohaibi=الوهيبي، Alkhlaifi/Alkhulaifi=الخليفي،
+Almuhaini/Almuhayni=المهيني، Alshowaier/Alshuwaier=الشويعر،
+Aldakhil/Aldokhil=الدوخي، Almalak/Almalik=المالك
 
-## جدول التحويل الصوتي للأسماء الأولى
-Bander=بندر، Khalid/Khaled=خالد، Mohammed/Mohammad/Muhammad=محمد، Abdullah=عبدالله،
-Faisal/Faysal=فيصل، Nayef/Naif=نايف، Majed/Maajed=ماجد، Ahmad/Ahmed=أحمد،
-Abdulaziz=عبدالعزيز، Abdulrahman=عبدالرحمن، Abdulmalik=عبدالملك، Meshari=مشاري،
-Osama=أسامة، Ibrahim=إبراهيم، Falah=فلاح، Khalf=خلف، Mana/Mane=مانع،
-Nemer/Namer=نمر، Sultan=سلطان، Yahya=يحيى، Waleed=وليد، Turkii/Turki=تركي،
-Haifa/Haifaa=هيفاء، Zamil/Zamel=زامل، Lamia/Lmyaa=لمياء، Haya/Hayaa=هياء،
-Taghreed/Tagrid=تغريد، Nouf=نوف، Saud=سعود، Nawaf=نواف, Muath/Muaadh=معاذ,
-Meana/Moana/Maana=معنى، Anes/Anis=أنيس، Youssef/Yousef=يوسف، Salman=سلمان
+## جدول التحويل الصوتي — الأسماء الأولى
+Bander/Bandar=بندر، Khalid/Khaled=خالد، Mohammed/Mohammad/Muhammad=محمد،
+Abdullah/Abdulla=عبدالله، Faisal/Faysal/Feisal=فيصل، Nayef/Naif/Nayif=نايف،
+Majed/Maajed/Majid=ماجد، Ahmad/Ahmed=أحمد، Abdulaziz/Abdulazez=عبدالعزيز،
+Abdulrahman/Abdurahman=عبدالرحمن، Abdulmalik/Abdulmalek=عبدالملك،
+Meshari/Mishary=مشاري، Osama/Usama=أسامة، Ibrahim/Ebrahim=إبراهيم،
+Falah=فلاح، Khalf/Khalaf=خلف، Mana/Mane/Manea=مانع،
+Nemer/Namer/Namir=نمر، Sultan/Soltan=سلطان، Yahya/Yahia=يحيى،
+Turkii/Turki/Turkey=تركي، Haifa/Haifaa/Hayfa=هيفاء، Zamil/Zamel=زامل،
+Lamia/Lmyaa/Lamya=لمياء، Haya/Hayaa/Haia=هياء، Taghreed/Tagrid=تغريد،
+Nouf/Noof=نوف، Saud/Saood=سعود، Nawaf/Nawwaf=نواف، Muath/Muaadh/Moaz=معاذ،
+Meana/Moana/Maana/Mana=معنى، Anes/Anis/Aniis=أنيس، Youssef/Yousef/Yusuf=يوسف،
+Salman=سلمان، Waleed/Walid=وليد، Hessa/Hisa=حصة، Taghreed=تغريد،
+Sami/Samee=سامي، Omar/Omer=عمر
 ${prevSection}
 ## الخطوة ١: استخرج كل الأسماء من اللقطات
-- اقرأ كل اسم في قائمة المشاركين بدقة
-- تجاهل: Me، Host، Presenter، Unverified، المضيف، أنا
-- احتفظ بالاسم كما كُتب تماماً
+- اقرأ كل اسم في قائمة المشاركين بدقة تامة
+- تجاهل تماماً: Me، Host، Presenter، Unverified، المضيف، أنا، alriyadh.gov.sa وأي بريد إلكتروني
+- احتفظ بالاسم الكامل كما كُتب
 
-## الخطوة ٢: لكل اسم طابق باستخدام قاعدة اسم العائلة أولاً
-1. استخرج اسم العائلة من الاسم الظاهر في اللقطة
-2. ابحث في القائمة عمن لقبه يطابق هذا اللقب (بعد التحويل الصوتي)
-3. إن وجدت شخصاً واحداً → present مؤكد (confident: true)
-4. إن وجدت أكثر من شخص بنفس اللقب → uncertain
-5. إن لم يوجد أي لقب (اسم أول فقط) وهناك أكثر من مدعو بهذا الاسم → uncertain
-6. إن لم يطابق أي مدعو → outOfList
+## الخطوة ٢: لكل اسم — طبّق منطق المطابقة الكامل أعلاه
 
-## الخطوة ٣: الإخراج — JSON فقط بلا أي نص آخر
+## الخطوة ٣: أعِد JSON فقط — لا نص قبله أو بعده
 {
-  "present": [{"num": 52, "rawName": "Bander Alkatheri (alriyadh)", "confident": true}],
-  "uncertain": [{
-    "rawName": "الاسم كما ظهر",
-    "possibleMatches": [{"num": 13, "name": "م. محمد علي القحطاني", "reason": "نفس اللقب القحطاني"}],
-    "issue": "وصف المشكلة",
-    "suggestedAction": "ماذا يفعل المستخدم؟"
-  }],
-  "outOfList": ["اسم ليس من المدعوين"],
+  "present": [
+    {"num": 52, "rawName": "Bander Alkatheri (alriyadh)", "confident": true}
+  ],
+  "uncertain": [
+    {
+      "rawName": "Mohammed Alqahtani",
+      "possibleMatches": [
+        {"num": 13, "name": "م. محمد علي القحطاني", "reason": "اللقب القحطاني + الاسم محمد يتطابقان"},
+        {"num": 43, "name": "م. محمد يحيى القحطاني", "reason": "اللقب القحطاني + الاسم محمد يتطابقان"}
+      ],
+      "issue": "اللقب القحطاني مشترك بين مدعوَّين كلاهما اسمه محمد",
+      "suggestedAction": "تحقق من البريد الإلكتروني أو اللقب الوظيفي لتحديد أيهما"
+    }
+  ],
+  "outOfList": ["هالة سعد"],
   "flags": []
 }
 
@@ -91,7 +125,7 @@ ${rosterText}`;
         type: "image",
         source: { type: "base64", media_type: im.mimeType || "image/jpeg", data: im.data },
       })),
-      { type: "text", text: "حلّل الآن — اسم العائلة أولاً — وأعِد JSON فقط." },
+      { type: "text", text: "طبّق منطق الاسم الكامل وأعِد JSON فقط." },
     ];
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
