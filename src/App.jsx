@@ -93,11 +93,13 @@ async function fileToImage(file){
 // periodPresent = [{num, rawName}] from already-resolved period 1 (passed to period 2)
 async function analyzePeriod(images,roster,periodPresent=[]){
   const rosterText=roster.map(m=>`${m.id}. ${m.name} — ${m.position}`).join("\n");
+  const rosterJson=roster.map(m=>({id:m.id,name:m.name,position:m.position}));
   const resp=await fetch("/api/analyze",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
       rosterText,
+      rosterJson,
       images:images.map(im=>({mimeType:im.mediaType,data:im.b64})),
       previousPresent:periodPresent,
     }),
