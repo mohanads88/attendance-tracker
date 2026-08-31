@@ -87,6 +87,8 @@ const TRANS = {
   omar:"عمر", omer:"عمر",
   sami:"سامي", samee:"سامي",
   muhannad:"مهند", mohannad:"مهند",
+  alhaydar:"آل حيدر", haydar:"حيدر", alhaidar:"آل حيدر", haidar:"حيدر", haider:"حيدر",
+  mahdi:"مهدي", mahdee:"مهدي",
   maher:"ماهر",
   hala:"هالة", halah:"هالة",
   mahdi:"مهدي", mahdee:"مهدي",
