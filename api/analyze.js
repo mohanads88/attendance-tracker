@@ -8,55 +8,75 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const { rosterText, images, previousPresent } = body;
 
-    // Validate inputs
     if (!rosterText) return res.status(400).json({ error: "قائمة المدعوين مفقودة" });
     if (!Array.isArray(images) || images.length === 0) return res.status(400).json({ error: "لا توجد لقطات للتحليل" });
 
-    // Check payload size — Vercel limit is 4.5MB
     const payloadSize = JSON.stringify(body).length;
     if (payloadSize > 4000000) {
       return res.status(413).json({
-        error: "حجم اللقطات كبير جداً — قلّل عدد اللقطات أو استخدم صوراً بدقة أقل",
-        detail: `حجم الطلب: ${Math.round(payloadSize/1024)}KB (الحد الأقصى: ~4000KB)`
+        error: `حجم اللقطات كبير جداً (${Math.round(payloadSize/1024)}KB) — قلّل عدد اللقطات`,
       });
     }
 
-    // Build previous period context (text only — no images)
     const prevSection = Array.isArray(previousPresent) && previousPresent.length > 0
-      ? `\n## سياق الفترة الأولى (للمرجعية فقط)
-هؤلاء تأكّد حضورهم في الفترة الأولى:
-${previousPresent.map(p => `- رقم ${p.num}: ${p.rawName}`).join("\n")}
-إذا ظهر نفس الشخص في هذه الفترة، أكّده في present بنفس رقمه مباشرةً (confident: true).\n`
+      ? `\n## الفترة الأولى (مرجع)\nهؤلاء تأكّد حضورهم في الفترة الأولى — إذا ظهروا مجدداً أكّدهم مباشرة:\n${previousPresent.map(p => `- رقم ${p.num}: "${p.rawName}"`).join("\n")}\n`
       : "";
 
-    const instruction = `أنت خبير دقيق في قراءة أسماء المشاركين من لقطات شاشة اجتماعات Webex وTeams ومطابقتها مع قوائم المدعوين.
+    const instruction = `أنت خبير في مطابقة أسماء المشاركين في اجتماعات Webex/Teams مع قوائم المدعوين.
 
-## الخطوة ١: استخرج كل الأسماء من اللقطات
-- اقرأ كل اسم مرئي في قائمة المشاركين بدقة
-- تجاهل تمامًا: Me، Host، Presenter، Unverified، المضيف، أنا
-- احتفظ بالاسم كما هو مكتوب تمامًا
+## قاعدة المطابقة الأساسية — اسم العائلة أولاً
+**المعيار الأول والأهم هو اسم العائلة (اللقب)**، وليس الاسم الأول.
+- "Bander Alkatheri" → ابحث عمن لقبه "الكثيري" في القائمة (= بندر الكثيري)، وليس كل من اسمه "بندر"
+- "Bander Alharbi" → ابحث عمن لقبه "الحربي" (= بندر الحربي)
+- "Mohammed Alqahtani" → ابحث عمن لقبه "القحطاني" — قد يكون أكثر من شخص فتضعه uncertain
+- "zamil alshammari" → لقبه "الشمري" = زامل الشمري
+- "Turkii" → اسم أول فقط بلا لقب → uncertain إن كان هناك أكثر من تركي، مؤكد إن كان واحداً
+
+## جدول التحويل الصوتي للألقاب (اسم العائلة)
+Alkatheri=الكثيري، Alharbi=الحربي، Alrowaily/Alruwaily=الرويلي، Alaqeel=العقيل، Alhunaidi=الحنيدي، 
+Aldalbahi/Aldlbahi=الدلبحي، Alomari=العميري، Alqahtani=القحطاني، Alaqeel=العقيل،
+Alsaiari/Alsayari=السياري، Almadhi/Almaathy=الماضي، Aldalbahi=الدلبحي، Alomiri/Alomeri=العميري،
+Alaqeel=العقيل، Alnassar/Alnasser=النصار، Alzahrani=الزهراني، Alkriidis/Alkreidis=الكريديس،
+Alsuwailem/Alsuwayylem=السويلم، Alanazi/Alenazi=العنزي، Albaker/Albakar=البكر،
+Altlasi/Althalasi=الطلاسي، Alajlan/Alajlaan=العجلان، Aldhayib/Aldhyib=الذييب،
+Alfaqih/Faqih=فقيه، Alasmari=الأسمري، Aldosari/Aldossari=الدوسري، Alsabiee/Alsobiee=السبيعي،
+Alfahd=الفهد، Alotaibi/Alataibi=العتيبي، Karhaan/Karhan=كرحان، Alshammari=الشمري،
+Alyousif/Alyousef=اليوسف، Alissa/Aleisa=العيسى، Barkati/Barkati=بركاتي، Bawazer/Bawazeer=باوزير،
+Ateeq/Atiq=عتيق، Almutairi/Almutair=المطيري، Albarrak=البراك، Alnassian/Alnasian=النصيان،
+Alruwaili/Alrowaily=الرويلي، Alkhlaifi/Alkhulaifi=الكثيري، Alkatheri=الكثيري،
+Aldagfaq/Aldaghfaq=الدغفق، Alghamdi=الغامدي
+
+## جدول التحويل الصوتي للأسماء الأولى
+Bander=بندر، Khalid/Khaled=خالد، Mohammed/Mohammad/Muhammad=محمد، Abdullah=عبدالله،
+Faisal/Faysal=فيصل، Nayef/Naif=نايف، Majed/Maajed=ماجد، Ahmad/Ahmed=أحمد،
+Abdulaziz=عبدالعزيز، Abdulrahman=عبدالرحمن، Abdulmalik=عبدالملك، Meshari=مشاري،
+Osama=أسامة، Ibrahim=إبراهيم، Falah=فلاح، Khalf=خلف، Mana/Mane=مانع،
+Nemer/Namer=نمر، Sultan=سلطان، Yahya=يحيى، Waleed=وليد، Turkii/Turki=تركي،
+Haifa/Haifaa=هيفاء، Zamil/Zamel=زامل، Lamia/Lmyaa=لمياء، Haya/Hayaa=هياء،
+Taghreed/Tagrid=تغريد، Nouf=نوف، Saud=سعود، Nawaf=نواف, Muath/Muaadh=معاذ,
+Meana/Moana/Maana=معنى، Anes/Anis=أنيس، Youssef/Yousef=يوسف، Salman=سلمان
 ${prevSection}
-## الخطوة ٢: طابق مع قائمة المدعوين
+## الخطوة ١: استخرج كل الأسماء من اللقطات
+- اقرأ كل اسم في قائمة المشاركين بدقة
+- تجاهل: Me، Host، Presenter، Unverified، المضيف، أنا
+- احتفظ بالاسم كما كُتب تماماً
 
-**مؤكد (confident: true) عند:**
-- تطابق اسم العائلة + جزء من الاسم الأول
-- تحويل صوتي واضح: Turkii=تركي، Haifa=هيفاء، Zamil=زامل، Khalid=خالد، Faisal=فيصل، Abdullah=عبدالله، Mohammed=محمد، Bander=بندر، Nayef=نايف، Majed=ماجد، Ahmad=أحمد، Lamia=لمياء، Haya=هياء، Taghreed=تغريد، Abdulaziz=عبدالعزيز، Abdulrahman=عبدالرحمن، Meshari=مشاري، Osama=أسامة، Ibrahim=إبراهيم، Falah=فلاح، Khalf=خلف، Mana=مانع، Nemer=نمر، Sultan=سلطان، Yahya=يحيى
-- اسم مختصر + لقب المكتب/القطاع
+## الخطوة ٢: لكل اسم طابق باستخدام قاعدة اسم العائلة أولاً
+1. استخرج اسم العائلة من الاسم الظاهر في اللقطة
+2. ابحث في القائمة عمن لقبه يطابق هذا اللقب (بعد التحويل الصوتي)
+3. إن وجدت شخصاً واحداً → present مؤكد (confident: true)
+4. إن وجدت أكثر من شخص بنفس اللقب → uncertain
+5. إن لم يوجد أي لقب (اسم أول فقط) وهناك أكثر من مدعو بهذا الاسم → uncertain
+6. إن لم يطابق أي مدعو → outOfList
 
-**غير مؤكد (confident: false) عند:**
-- اسم أول فقط وهناك أكثر من مدعو بنفسه
-- شخص يحمل لقب مكتب مدعو لكن باسم مختلف (نائب محتمل)
-- أي تشابه غير واضح 100%
-
-## الخطوة ٣: الإخراج
-أعِد JSON فقط — لا نص قبله ولا بعده:
+## الخطوة ٣: الإخراج — JSON فقط بلا أي نص آخر
 {
-  "present": [{"num": 1, "rawName": "الاسم كما ظهر", "confident": true}],
+  "present": [{"num": 52, "rawName": "Bander Alkatheri (alriyadh)", "confident": true}],
   "uncertain": [{
     "rawName": "الاسم كما ظهر",
-    "possibleMatches": [{"num": 13, "name": "م. محمد علي القحطاني", "reason": "سبب التشابه"}],
-    "issue": "وصف المشكلة باختصار",
-    "suggestedAction": "ماذا يجب على المستخدم أن يفعل؟"
+    "possibleMatches": [{"num": 13, "name": "م. محمد علي القحطاني", "reason": "نفس اللقب القحطاني"}],
+    "issue": "وصف المشكلة",
+    "suggestedAction": "ماذا يفعل المستخدم؟"
   }],
   "outOfList": ["اسم ليس من المدعوين"],
   "flags": []
@@ -71,7 +91,7 @@ ${rosterText}`;
         type: "image",
         source: { type: "base64", media_type: im.mimeType || "image/jpeg", data: im.data },
       })),
-      { type: "text", text: "حلّل الآن وأعِد JSON فقط." },
+      { type: "text", text: "حلّل الآن — اسم العائلة أولاً — وأعِد JSON فقط." },
     ];
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -89,7 +109,6 @@ ${rosterText}`;
     });
 
     const data = await response.json();
-
     if (!response.ok) {
       console.error("Claude error:", JSON.stringify(data));
       return res.status(502).json({
@@ -100,10 +119,9 @@ ${rosterText}`;
 
     const text = (data.content || []).map(b => b.type === "text" ? b.text : "").join("").trim();
     const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const s = clean.indexOf("{");
-    const e = clean.lastIndexOf("}");
+    const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
     if (s === -1 || e === -1) {
-      console.error("Unexpected Claude response:", text.slice(0, 300));
+      console.error("Unexpected response:", text.slice(0, 300));
       return res.status(502).json({ error: "رد غير متوقع من Claude", raw: text.slice(0, 200) });
     }
 
