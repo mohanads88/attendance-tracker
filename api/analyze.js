@@ -17,6 +17,7 @@ const TRANS = {
   alrowaily:"الرويلي", alruwaily:"الرويلي", alruwaili:"الرويلي",
   alaqeel:"العقيل", alaqil:"العقيل",
   alaqal:"العقل", alaqel:"العقل", alaql:"العقل", alaqle:"العقل",
+  alaqle:"العقل", alaqll:"العقل", alaaqal:"العقل", alaaql:"العقل",
   aldalbahi:"الدلبحي", aldlbahi:"الدلبحي",
   alomiri:"العميري", alomeri:"العميري", alomary:"العميري",
   alqahtani:"القحطاني", qahtani:"القحطاني",
@@ -54,6 +55,7 @@ const TRANS = {
   alosaimi:"العصيمي", osaimi:"العصيمي",
   alhaydar:"آل حيدر", alhaidar:"آل حيدر", haider:"حيدر",
   alhaydr:"آل حيدر", haydar:"حيدر", haidar:"حيدر",
+  alhayder:"آل حيدر", haydr:"حيدر", hedar:"حيدر", hyder:"حيدر",
   // First names
   bander:"بندر", bandar:"بندر",
   khalid:"خالد", khaled:"خالد",
@@ -207,16 +209,34 @@ function scoreMatch(rawName, member) {
   const srcTokens = translated.split(" ").filter(t => t.length >= 2);
   const tgtTokens = target.split(" ").filter(t => t.length >= 2);
   if (!srcTokens.length || !tgtTokens.length) return 0;
+
+  // Full match: every source token vs every target token
   let totalScore = 0, matchedCount = 0;
   for (const src of srcTokens) {
     let best = 0;
     for (const tgt of tgtTokens) best = Math.max(best, scoreTokenPair(src, tgt));
     if (best > 0) { totalScore += best; matchedCount++; }
   }
-  if (matchedCount === 0) return 0;
-  const avg      = totalScore / matchedCount;
-  const coverage = matchedCount / srcTokens.length;
-  return Math.round(avg * (0.65 + 0.35 * coverage));
+  const fullScore = matchedCount === 0 ? 0 :
+    Math.round((totalScore / matchedCount) * (0.65 + 0.35 * matchedCount / srcTokens.length));
+
+  // First+Last match: compare only first and last tokens of src vs tgt
+  // Handles cases where middle names differ (e.g. "محمد العقل" vs "محمد بن عبدالله العقل")
+  let flScore = 0;
+  if (srcTokens.length >= 2 && tgtTokens.length >= 2) {
+    const srcFL = [srcTokens[0], srcTokens[srcTokens.length - 1]];
+    const tgtFL = [tgtTokens[0], tgtTokens[tgtTokens.length - 1]];
+    let flTotal = 0, flMatched = 0;
+    for (const src of srcFL) {
+      let best = 0;
+      for (const tgt of tgtFL) best = Math.max(best, scoreTokenPair(src, tgt));
+      if (best > 0) { flTotal += best; flMatched++; }
+    }
+    // Only use FL score if both first AND last matched well
+    if (flMatched === 2) flScore = Math.round((flTotal / 2) * 0.92);
+  }
+
+  return Math.max(fullScore, flScore);
 }
 
 function matchName(rawName, roster) {
