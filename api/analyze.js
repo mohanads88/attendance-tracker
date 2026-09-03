@@ -1,7 +1,5 @@
-// ─────────────────────────────────────────────────────────────
-// Step 1: Claude reads raw names from screenshots (vision)
-// Step 2: JavaScript matches them to the roster (deterministic)
-// ─────────────────────────────────────────────────────────────
+// Step 1: Claude reads raw names (Sonnet vision)
+// Step 2: JavaScript matches to roster (deterministic)
 
 const TRANS = {
   alkatheri:"الكثيري", alkhatheri:"الكثيري",
@@ -31,6 +29,9 @@ const TRANS = {
   alotaibi:"العتيبي", alataibi:"العتيبي", alotaybi:"العتيبي",
   karhaan:"كرحان", karhan:"كرحان",
   alshammari:"الشمري", alshammary:"الشمري",
+  // الشمراني يُكتب أحياناً بالثاء بدلاً من الشين
+  althamrani:"الشمراني", althammrani:"الشمراني",
+  alshammrani:"الشمراني", alshamrani:"الشمراني",
   alyousif:"اليوسف", alyousef:"اليوسف",
   alissa:"العيسى", aleisa:"العيسى",
   barkati:"بركاتي",
@@ -43,6 +44,8 @@ const TRANS = {
   alghamdi:"الغامدي",
   alrabiah:"الربيعة", alrabea:"الربيعة",
   alosaimi:"العصيمي", osaimi:"العصيمي",
+  // عسيري يُقرأ أحياناً حسيري بسبب تشابه العين والحاء
+  alosairy:"العصيمي", husairy:"عسيري", husiri:"عسيري",
   alhaydar:"آل حيدر", alhaidar:"آل حيدر", haider:"حيدر",
   bander:"بندر", bandar:"بندر",
   khalid:"خالد", khaled:"خالد",
@@ -87,6 +90,9 @@ function normalize(str) {
     .replace(/\u0627\u0644/g, "")
     .replace(/\bبن\b|\bبنت\b/g, "")
     .replace(/^(م|د|eng|dr|mr)\s*[.\s]/gi, "")
+    // تصحيح الأخطاء البصرية الشائعة في العربية قبل المقارنة
+    .replace(/ث/g, "ش")   // الثاء تُقرأ أحياناً شيناً والعكس
+    .replace(/ح/g, "ع")   // الحاء تُقرأ أحياناً عيناً والعكس — فقط للمقارنة
     .replace(/[.\-_,،()\[\]]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -114,16 +120,11 @@ function translateName(rawName) {
 function scoreTokenPair(src, tgt) {
   if(!src||!tgt) return 0;
   if(src===tgt) return 100;
-  // Strict mode for short tokens — العقل vs العقيل
   const shorter=Math.min(src.length,tgt.length);
   const longer=Math.max(src.length,tgt.length);
-  if(shorter<=4) {
-    // Allow max 1 char difference only
-    return lev(src,tgt)<=1 ? 82 : 0;
-  }
+  if(shorter<=4) return lev(src,tgt)<=1 ? 82 : 0;
   if(tgt.includes(src)||src.includes(tgt)) {
     const ratio=shorter/longer;
-    // Only accept substring if lengths are close (within 2 chars)
     return longer-shorter<=2 ? Math.round(80*ratio) : Math.round(55*ratio);
   }
   const dist=lev(src,tgt);
@@ -158,7 +159,9 @@ function matchName(rawName, roster) {
   if(top.score>=CONFIDENT&&(top.score-(second?.score||0))>=GAP)
     return{type:"confident",num:top.member.id,score:top.score};
   const candidates=scores.filter(s=>s.score>=CANDIDATE&&s.score>=top.score-GAP);
-  return{type:"uncertain",candidates:candidates.slice(0,4).map(s=>({num:s.member.id,name:s.member.name,score:s.score,reason:`تطابق ${s.score}%`}))};
+  return{type:"uncertain",candidates:candidates.slice(0,4).map(s=>({
+    num:s.member.id,name:s.member.name,score:s.score,reason:`تطابق ${s.score}%`
+  }))};
 }
 
 export default async function handler(req, res) {
@@ -169,28 +172,34 @@ export default async function handler(req, res) {
   try {
     const body=req.body||{};
     const{rosterJson,images,previousPresent}=body;
-    if(!Array.isArray(images)||images.length===0) return res.status(400).json({error:"لا توجد لقطات للتحليل"});
-    if(JSON.stringify(body).length>4000000) return res.status(413).json({error:"حجم اللقطات كبير جداً — قلّل عدد اللقطات"});
+    if(!Array.isArray(images)||images.length===0)
+      return res.status(400).json({error:"لا توجد لقطات للتحليل"});
+    if(JSON.stringify(body).length>4000000)
+      return res.status(413).json({error:"حجم اللقطات كبير جداً — قلّل عدد اللقطات"});
 
     const prevContext=Array.isArray(previousPresent)&&previousPresent.length>0
       ?`\nهؤلاء ظهروا في الفترة السابقة:\n${previousPresent.map(p=>`"${p.rawName}"`).join("، ")}\n`:"";
 
     const extractPrompt=`مهمتك الوحيدة: اقرأ كل اسم في قائمة المشاركين من هذه اللقطات واكتبه كما هو تماماً.
 
-## تعليمات القراءة الدقيقة — مهمة جداً
+## تنبيهات القراءة الدقيقة — هذه الحروف تتشابه بصرياً:
 
-الأسماء العربية تتشابه بصرياً — اقرأ كل حرف بعناية:
-- "العقل" ≠ "العقيل" — الاثنان موجودان وهما أشخاص مختلفون تماماً
-- "السياري" ≠ "السواري" — الياء والواو مختلفتان
-- "الدلبحي" ≠ "الدلبجي" — الحاء والجيم مختلفتان  
-- "الذييب" يحتوي على ياءين — لا تحذف واحدة
-- إذا رأيت "..." في نهاية الاسم فهذا يعني أن النص مقطوع — اكتب ما يظهر فقط ولا تكمل من خيالك
+| الخطأ الشائع | الصحيح | السبب |
+|---|---|---|
+| حسيري | عسيري | الحاء ← العين |
+| الثمراني | الشمراني | الثاء ← الشين |
+| الدلبجي | الدلبحي | الجيم ← الحاء |
+| السواري | السياري | الواو ← الياء |
+| العقيل | العقل | حرف زائد |
+| الذيب | الذييب | ياء ناقصة |
 
-تجاهل هذه الكلمات كلياً — ليست أسماء:
-Me، Host، Presenter، Unverified، المضيف، أنا، وأي بريد إلكتروني مثل alriyadh.gov.sa أو gmail.com
+**القاعدة:** إذا رأيت حرفاً تشك فيه، اقرأه كما هو في اللقطة تماماً — لا تصحّح ولا تخمّن.
+إذا رأيت "..." فالاسم مقطوع — اكتب ما يظهر فقط.
+
+تجاهل كلياً: Me، Host، Presenter، Unverified، المضيف، أنا، وأي بريد إلكتروني.
 ${prevContext}
 الإخراج — JSON فقط:
-{"names": ["الاسم الأول كما ظهر في اللقطة", "الاسم الثاني كما ظهر"]}`;
+{"names": ["الاسم الأول كما ظهر", "الاسم الثاني كما ظهر"]}`;
 
     const content=[
       {type:"text",text:extractPrompt},
@@ -205,12 +214,14 @@ ${prevContext}
     });
 
     const claudeData=await claudeResp.json();
-    if(!claudeResp.ok) return res.status(502).json({error:"خطأ من خدمة Claude",detail:claudeData?.error?.message||""});
+    if(!claudeResp.ok)
+      return res.status(502).json({error:"خطأ من خدمة Claude",detail:claudeData?.error?.message||""});
 
     const rawText=(claudeData.content||[]).map(b=>b.type==="text"?b.text:"").join("").trim();
     const cleanText=rawText.replace(/```json/gi,"").replace(/```/g,"").trim();
     const s=cleanText.indexOf("{"),e=cleanText.lastIndexOf("}");
-    if(s===-1||e===-1) return res.status(502).json({error:"رد غير متوقع من Claude",raw:rawText.slice(0,200)});
+    if(s===-1||e===-1)
+      return res.status(502).json({error:"رد غير متوقع من Claude",raw:rawText.slice(0,200)});
 
     const extracted=JSON.parse(cleanText.slice(s,e+1));
     const rawNames=(extracted.names||[]).filter(n=>n&&n.trim().length>1);
