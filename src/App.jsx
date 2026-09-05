@@ -108,11 +108,17 @@ async function analyzePeriod(images,roster,periodPresent=[]){
   const data=await resp.json();
   if(!resp.ok) throw new Error(data.error||"فشل التحليل — تحقق من عدد اللقطات أو اتصالك بالإنترنت");
   const present={};
-  (data.present||[]).forEach(p=>{if(p&&p.num) present[p.num]=p.rawName||"";});
-  return{present,uncertain:data.uncertain||[],outOfList:data.outOfList||[],flags:data.flags||[]};
+  const scores={};
+  (data.present||[]).forEach(p=>{
+    if(p&&p.num){
+      present[p.num]=p.rawName||"";
+      scores[p.num]=p.score||100;
+    }
+  });
+  return{present,scores,uncertain:data.uncertain||[],outOfList:data.outOfList||[],flags:data.flags||[]};
 }
 
-const EMPTY_PERIOD={images:[],present:{},uncertain:[],outOfList:[],flags:[],resolved:{},analyzing:false,analyzed:false,error:null};
+const EMPTY_PERIOD={images:[],present:{},scores:{},uncertain:[],outOfList:[],flags:[],resolved:{},analyzing:false,analyzed:false,error:null};
 
 function buildPresent(period){
   const map={};
@@ -163,8 +169,11 @@ export default function App(){
     const rawP1=p1Present[m.id]||"";
     const rawP2=p2Present[m.id]||"";
     const evidence=[rawP1,rawP2].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(" / ");
-    return{...m,inP1,inP2,present:inP1||inP2,evidence};
-  }),[roster,p1Present,p2Present,overrides]);
+    // Confidence: take the max score across both periods; overrides = 100 (manual = certain)
+    const autoScore=Math.max(p1.scores?.[m.id]||0, p2.scores?.[m.id]||0);
+    const confidence=o.p1!==undefined||o.p2!==undefined ? 100 : autoScore;
+    return{...m,inP1,inP2,present:inP1||inP2,evidence,confidence};
+  }),[roster,p1Present,p2Present,p1,p2,overrides]);
 
   const stats=useMemo(()=>{
     const present=merged.filter(m=>m.present).length;
@@ -421,9 +430,15 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
   const[showExtra,setShowExtra]=useState(false);
   const noData=!p1.analyzed&&!p2.analyzed;
 
+  // "needs review": present but confidence < 90, or manually overridden
+  const needsReviewCount=useMemo(()=>
+    merged.filter(m=>m.present&&m.confidence>0&&m.confidence<90).length
+  ,[merged]);
+
   const filtered=useMemo(()=>merged.filter(m=>{
     if(filter==="present") return m.present;
     if(filter==="absent") return!m.present;
+    if(filter==="review") return m.present&&m.confidence>0&&m.confidence<90;
     return true;
   }),[merged,filter]);
 
@@ -460,6 +475,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
         <Stat n={stats.absent} label="غائب" color={C.absent} bg={C.absentSoft} active={filter==="absent"} onClick={()=>setFilter(f=>f==="absent"?"all":"absent")}/>
         <Stat n={`${stats.pct}%`} label="نسبة الحضور" color={C.gold} bg={C.goldSoft}/>
         <Stat n={stats.total} label="إجمالي المدعوين" color={C.ink} bg="#eeece5" active={filter==="all"} onClick={()=>setFilter("all")}/>
+        {needsReviewCount>0&&<Stat n={needsReviewCount} label="يحتاج مراجعة" color={C.orange} bg={C.orangeSoft} active={filter==="review"} onClick={()=>setFilter(f=>f==="review"?"all":"review")}/>}
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
@@ -500,7 +516,16 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
                   <td style={{...td,textAlign:"center"}}><Toggle on={m.inP1} onClick={()=>setOverride(m.id,"p1",!m.inP1)}/></td>
                   <td style={{...td,textAlign:"center"}}><Toggle on={m.inP2} onClick={()=>setOverride(m.id,"p2",!m.inP2)}/></td>
                   <td style={{...td,textAlign:"center"}}><span style={{fontWeight:800,fontSize:13,color:m.present?C.present:C.absent}}>{m.present?"حضر":"لم يحضر"}</span></td>
-                  <td style={{...td,fontSize:12,color:m.evidence?C.ink:C.muted,fontStyle:m.evidence?"normal":"italic"}}>{m.evidence||"—"}</td>
+                  <td style={{...td,fontSize:12,color:m.evidence?C.ink:C.muted,fontStyle:m.evidence?"normal":"italic"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span>{m.evidence||"—"}</span>
+                      {m.present&&m.confidence>0&&m.confidence<90&&(
+                        <span title={`نسبة التطابق: ${m.confidence}%`} style={{background:C.orangeSoft,color:C.orange,borderRadius:10,padding:"2px 7px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                          {m.confidence}% ⚠️
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
