@@ -1,14 +1,12 @@
 // Step 1: Claude reads raw names from screenshots (Sonnet vision)
 // Step 2: JavaScript matches them to the roster (deterministic)
 //
-// Visual confusion rules applied in normalize() cover ALL similar future cases:
-// Rule A: ع ↔ ح  (عسيري/حسيري, عمر/حمر, عبدالله/حبدالله ...)
-// Rule B: ش ↔ ث  (الشمراني/الثمراني, شائم/ثائم ...)
-// Rule C: ح ↔ ج  (الدلبحي/الدلبجي, محمد/مجمد ...)
-// Rule D: ي ↔ و  (السياري/السواري, يوسف/ووسف ...)
-// Rule E: collapse repeated letters (الذييب=الذيب, الرويلي=الرويلي ...)
-// Rule F: آل = ال  (آل حيدر/ال حيدر ...)
-// Rule G: short-token strict matching prevents العقل/العقيل confusion
+// Matching strategy:
+// - Translate English tokens → Arabic via TRANS table
+// - Normalize Arabic (strip ال، بن، titles، tashkeel)
+// - Score using Levenshtein on token pairs
+// - Use First+Last token matching for names with middle names
+// - Visual confusion rules applied ONLY in the extraction prompt (not here)
 
 const TRANS = {
   // Family names
@@ -17,7 +15,6 @@ const TRANS = {
   alrowaily:"الرويلي", alruwaily:"الرويلي", alruwaili:"الرويلي",
   alaqeel:"العقيل", alaqil:"العقيل",
   alaqal:"العقل", alaqel:"العقل", alaql:"العقل", alaqle:"العقل",
-  alaqle:"العقل", alaqll:"العقل", alaaqal:"العقل", alaaql:"العقل",
   aldalbahi:"الدلبحي", aldlbahi:"الدلبحي",
   alomiri:"العميري", alomeri:"العميري", alomary:"العميري",
   alqahtani:"القحطاني", qahtani:"القحطاني",
@@ -46,10 +43,6 @@ const TRANS = {
   barkati:"بركاتي",
   bawazer:"باوزير", bawazeer:"باوزير",
   ateeq:"عتيق", atiq:"عتيق",
-  okaili:"العقيلي", okaely:"العقيلي", alukaily:"العقيلي", alukaili:"العقيلي",
-  alghofaili:"الغفيلي", alghufaili:"الغفيلي",
-  alanazi:"العنزي", alaanazi:"العنزي",
-  alsubaie:"السبيعي", alsubaei:"السبيعي",
   almutairi:"المطيري", almutair:"المطيري",
   albarrak:"البراك",
   alnassian:"النصيان", alnasian:"النصيان",
@@ -59,7 +52,10 @@ const TRANS = {
   alosaimi:"العصيمي", osaimi:"العصيمي",
   alhaydar:"آل حيدر", alhaidar:"آل حيدر", haider:"حيدر",
   alhaydr:"آل حيدر", haydar:"حيدر", haidar:"حيدر",
-  alhayder:"آل حيدر", haydr:"حيدر", hedar:"حيدر", hyder:"حيدر",
+  alhayder:"آل حيدر",
+  okaili:"العقيلي", okaely:"العقيلي",
+  alghofaili:"الغفيلي", alghufaili:"الغفيلي",
+  alsubaie:"السبيعي", alsubaei:"السبيعي",
   // First names
   bander:"بندر", bandar:"بندر",
   khalid:"خالد", khaled:"خالد",
@@ -84,87 +80,49 @@ const TRANS = {
   taghreed:"تغريد", tagrid:"تغريد",
   nouf:"نوف", noof:"نوف",
   saud:"سعود", nawaf:"نواف",
-  muath:"معاذ", muaadh:"معاذ",
+  muath:"معاذ", muaadh:"معاذ", moath:"معاذ",
   meana:"معنى", moana:"معنى", maana:"معنى",
   anes:"أنيس", anis:"أنيس",
   youssef:"يوسف", yousef:"يوسف",
   salman:"سلمان", waleed:"وليد", walid:"وليد",
   omar:"عمر", muhannad:"مهند", mohannad:"مهند",
   mahdi:"مهدي", mahdee:"مهدي",
-  tfaqih:"تغريد فقيه", faqih:"فقيه",
-  moath:"معاذ", muath:"معاذ",
-  meshari:"مشاري", mishary:"مشاري",
+  tfaqih:"تغريد",
 };
 
-// ── Visual confusion normalization ──
-// These rules convert BOTH the raw name AND the roster name to the same
-// canonical form before comparison — so ANY future name with these
-// visual confusions will be handled automatically.
-function applyVisualRules(str) {
-  return str
-    // Rule F: آل (family prefix) → ال before stripping
-    .replace(/آل\s*/g, "ال")
-    // Rule A: ع ↔ ح — unify to ع
-    // Covers: عسيري/حسيري, عمر/حمر, عبدالعزيز/حبدالعزيز ...
-    .replace(/ح/g, "ع")
-    // Rule B: ش ↔ ث — unify to ش
-    // Covers: الشمراني/الثمراني, شائم/ثائم, الشهري/الثهري ...
-    .replace(/ث/g, "ش")
-    // Rule C: ج ↔ ح already covered by Rule A (ح→ع, ج stays)
-    // But we also need ج ↔ ح visually: unify ج → ع as well for comparison
-    .replace(/ج/g, "ع")
-    // Rule D: ي ↔ و — unify to ي
-    // Covers: السياري/السواري, يوسف/ووسف, يحيى/وحيى ...
-    .replace(/و/g, "ي")
-    // Rule E: collapse repeated identical letters (max 1 of each)
-    // Covers: الذييب/الذيب, الرويلي stays correct, عقيل/عقل ...
-    .replace(/(.)\1+/g, "$1");
-}
-
-function normalize(str) {
-  if (!str) return "";
-  return str
-    .toLowerCase()
-    // Standard Arabic normalization
-    .replace(/[\u0622\u0623\u0625]/g, "\u0627")   // أ إ آ → ا
-    .replace(/\u0629/g, "\u0647")                  // ة → ه
-    .replace(/\u0649/g, "\u064a")                  // ى → ي
-    .replace(/[\u064b-\u065f]/g, "")               // strip tashkeel
-    .replace(/\u0627\u0644/g, "")                  // strip ال
-    .replace(/\bبن\b|\bبنت\b/g, "")               // strip بن/بنت
-    .replace(/^(م|د|eng|dr|mr)\s*[.\s]/gi, "")    // strip titles
-    // Apply all visual confusion rules
-    .pipe ? str : (() => {
-      let s = str
-        .toLowerCase()
-        .replace(/[\u0622\u0623\u0625]/g, "\u0627")
-        .replace(/\u0629/g, "\u0647")
-        .replace(/\u0649/g, "\u064a")
-        .replace(/[\u064b-\u065f]/g, "")
-        .replace(/\u0627\u0644/g, "")
-        .replace(/\bبن\b|\bبنت\b/g, "")
-        .replace(/^(م|د|eng|dr|mr)\s*[.\s]/gi, "");
-      s = applyVisualRules(s);
-      return s.replace(/[.\-_,،()\[\]]/g, " ").replace(/\s+/g, " ").trim();
-    })();
-}
-
-// Rewrite normalize properly (above had a syntax issue)
+// ── Normalize Arabic string for comparison ──
+// Does NOT apply visual confusion rules (those are for the prompt only)
 function norm(str) {
   if (!str) return "";
-  let s = str
+  return str
     .toLowerCase()
-    .replace(/[\u0622\u0623\u0625]/g, "\u0627")
-    .replace(/\u0629/g, "\u0647")
-    .replace(/\u0649/g, "\u064a")
-    .replace(/[\u064b-\u065f]/g, "")
-    .replace(/\u0627\u0644/g, "")
-    .replace(/\bبن\b|\bبنت\b/g, "")
-    .replace(/^(م|د|eng|dr|mr)\s*[.\s]/gi, "");
-  s = applyVisualRules(s);
-  return s.replace(/[.\-_,،()\[\]]/g, " ").replace(/\s+/g, " ").trim();
+    .replace(/[\u0622\u0623\u0625\u0622]/g, "\u0627")  // أ إ آ → ا
+    .replace(/\u0629/g, "\u0647")                        // ة → ه
+    .replace(/\u0649/g, "\u064a")                        // ى → ي
+    .replace(/[\u064b-\u065f]/g, "")                     // strip tashkeel
+    .replace(/آل\s*/g, "")                               // آل حيدر → حيدر
+    .replace(/^\u0627\u0644/, "")                        // strip ال at start
+    .replace(/ \u0627\u0644/g, " ")                         // strip ال after space
+    .replace(/\bبن\b|\bبنت\b/g, "")                     // strip بن/بنت
+    .replace(/^(م|د|eng|dr|mr)\s*[.\s]/gi, "")          // strip titles
+    .replace(/[.\-_,،()\[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
+// ── Translate English token → Arabic ──
+function translateToken(token) {
+  if (token.includes("@")) token = token.split("@")[0];
+  const t = token.toLowerCase().replace(/[^a-z]/g, "");
+  return TRANS[t] || token;
+}
+
+function translateName(rawName) {
+  const clean = rawName.replace(/\(.*?\)/g, "").replace(/\S+@\S+/g, "").trim();
+  return clean.split(/\s+/).map(translateToken).join(" ");
+}
+
+// ── Levenshtein distance ──
 function lev(a, b) {
   const m = a.length, n = b.length;
   if (m === 0) return n;
@@ -180,46 +138,37 @@ function lev(a, b) {
   return dp[m][n];
 }
 
-function translateToken(token) {
-  // Handle email: extract username before @
-  if (token.includes("@")) token = token.split("@")[0];
-  const t = token.toLowerCase().replace(/[^a-z]/g, "");
-  return TRANS[t] || token;
-}
-
-function translateName(rawName) {
-  const clean = rawName.replace(/\(.*?\)/g, "").replace(/\S+@\S+/g, "").trim();
-  return clean.split(/\s+/).map(translateToken).join(" ");
-}
-
+// ── Score two normalized tokens ──
 function scoreTokenPair(src, tgt) {
   if (!src || !tgt) return 0;
   if (src === tgt) return 100;
   const shorter = Math.min(src.length, tgt.length);
   const longer  = Math.max(src.length, tgt.length);
-  // Rule G: strict matching for short tokens prevents العقل/العقيل confusion
+  // Short tokens: strict (avoid العقل/العقيل false match)
   if (shorter <= 3) return lev(src, tgt) <= 1 ? 82 : 0;
   if (shorter <= 5) return lev(src, tgt) <= 2 ? 80 : 0;
-  // Substring match (close lengths only)
+  // Substring match (close lengths)
   if (tgt.includes(src) || src.includes(tgt)) {
     const ratio = shorter / longer;
     return longer - shorter <= 2 ? Math.round(80 * ratio) : Math.round(55 * ratio);
   }
-  // Levenshtein for longer tokens
-  const dist  = lev(src, tgt);
+  // Levenshtein
+  const dist = lev(src, tgt);
   const ratio = 1 - dist / longer;
   return ratio >= 0.78 ? Math.round(ratio * 80) : 0;
 }
 
+// ── Score raw name against a roster member ──
 function scoreMatch(rawName, member) {
   const translated = norm(translateName(rawName));
   const target     = norm(member.name);
   if (!translated || !target) return 0;
+
   const srcTokens = translated.split(" ").filter(t => t.length >= 2);
   const tgtTokens = target.split(" ").filter(t => t.length >= 2);
   if (!srcTokens.length || !tgtTokens.length) return 0;
 
-  // Full match: every source token vs every target token
+  // Full match score
   let totalScore = 0, matchedCount = 0;
   for (const src of srcTokens) {
     let best = 0;
@@ -229,25 +178,24 @@ function scoreMatch(rawName, member) {
   const fullScore = matchedCount === 0 ? 0 :
     Math.round((totalScore / matchedCount) * (0.65 + 0.35 * matchedCount / srcTokens.length));
 
-  // First+Last match: compare only first and last tokens of src vs tgt
-  // Handles cases where middle names differ (e.g. "محمد العقل" vs "محمد بن عبدالله العقل")
+  // First+Last score — handles middle names (بن + father name)
   let flScore = 0;
   if (srcTokens.length >= 2 && tgtTokens.length >= 2) {
-    const srcFL = [srcTokens[0], srcTokens[srcTokens.length - 1]];
-    const tgtFL = [tgtTokens[0], tgtTokens[tgtTokens.length - 1]];
-    let flTotal = 0, flMatched = 0;
-    for (const src of srcFL) {
+    const sFL = [srcTokens[0], srcTokens[srcTokens.length - 1]];
+    const tFL = [tgtTokens[0], tgtTokens[tgtTokens.length - 1]];
+    let ft = 0, fc = 0;
+    for (const src of sFL) {
       let best = 0;
-      for (const tgt of tgtFL) best = Math.max(best, scoreTokenPair(src, tgt));
-      if (best > 0) { flTotal += best; flMatched++; }
+      for (const tgt of tFL) best = Math.max(best, scoreTokenPair(src, tgt));
+      if (best > 0) { ft += best; fc++; }
     }
-    // Only use FL score if both first AND last matched well
-    if (flMatched === 2) flScore = Math.round((flTotal / 2) * 0.92);
+    if (fc === 2) flScore = Math.round((ft / 2) * 0.92);
   }
 
   return Math.max(fullScore, flScore);
 }
 
+// ── Match one raw name against roster ──
 function matchName(rawName, roster) {
   const CONFIDENT = 76, CANDIDATE = 50, GAP = 22;
   const scores = roster
@@ -267,6 +215,7 @@ function matchName(rawName, roster) {
   };
 }
 
+// ════════════════════════════════════════════════════════════
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   const key = process.env.ANTHROPIC_API_KEY;
@@ -289,30 +238,28 @@ export default async function handler(req, res) {
 ## المنهجية — اتبع هذه الخطوات بالترتيب
 
 **الخطوة ١: امسح اللقطة من أعلى إلى أسفل بالكامل**
-قبل أي شيء، عُدّ عدد الأسماء الظاهرة في اللقطة تقريباً، ثم تأكد أن JSON النهائي يحتوي نفس العدد تقريباً.
+عُدّ عدد الأسماء الظاهرة تقريباً، ثم تأكد أن JSON النهائي يحتوي نفس العدد تقريباً.
 
-**الخطوة ٢: لكل سطر في القائمة استخرج الاسم**
-- إذا كان السطر يحتوي اسماً عربياً → اكتبه
-- إذا كان السطر يحتوي اسماً إنجليزياً → اكتبه
-- إذا كان السطر يحتوي بريداً إلكترونياً مثل "tfaqih@alriyadh.gov.sa" → اكتب البريد كاملاً (سيُعالَج لاحقاً)
-- إذا كان السطر يحتوي "Unverified" أو "alriyadh.gov.sa" كنص ثانوي فقط → تجاهله، اقرأ الاسم فوقه
+**الخطوة ٢: لكل سطر استخرج الاسم كما هو**
+- اسم عربي → اكتبه بالعربية
+- اسم إنجليزي → اكتبه بالإنجليزية
+- بريد إلكتروني مثل tfaqih@alriyadh.gov.sa → اكتبه كاملاً
+- "Unverified" أو alriyadh.gov.sa كنص ثانوي فقط → تجاهله
 
-**الخطوة ٣: تجاهل هذه الكلمات كلياً — ليست أسماء**
-Me، Host، Presenter، Unverified، المضيف، أنا
+**تجاهل كلياً:** Me، Host، Presenter، Unverified، المضيف، أنا
 
-**تنبيهات القراءة — أزواج تتشابه بصرياً:**
-| ع (عين) | يُخطأ بـ ح | عسيري/حسيري |
-| ش (شين) | يُخطأ بـ ث | الشمراني/الثمراني |
-| ح (حاء) | يُخطأ بـ ج | الدلبحي/الدلبجي |
-| ي (ياء) | يُخطأ بـ و | السياري/السواري |
-
-تنبيهات خاصة:
-- "آل" (كما في آل حيدر) جزء من العائلة — لا تكتبها "ال"
-- الذييب يحتوي ياءين
-- العقل ≠ العقيل
+**تنبيهات القراءة — أحرف تتشابه بصرياً:**
+| الخطأ الشائع | الصحيح |
+|---|---|
+| حسيري | عسيري (ح ↔ ع) |
+| الثمراني | الشمراني (ث ↔ ش) |
+| الدلبجي | الدلبحي (ج ↔ ح) |
+| العقيل | العقل (حرف زائد) |
+| الذيب | الذييب (ياءان) |
+| ال حيدر | آل حيدر |
 ${prevContext}
 **الإخراج — JSON فقط:**
-{"names": ["الاسم الأول كما ظهر", "الاسم الثاني"]}`;
+{"names": ["الاسم الأول", "الاسم الثاني"]}`;
 
     const content = [
       { type: "text", text: extractPrompt },
@@ -341,7 +288,7 @@ ${prevContext}
     if (!claudeResp.ok)
       return res.status(502).json({ error: "خطأ من خدمة Claude", detail: claudeData?.error?.message || "" });
 
-    const rawText   = (claudeData.content || []).map(b => b.type === "text" ? b.text : "").join("").trim();
+    const rawText  = (claudeData.content || []).map(b => b.type === "text" ? b.text : "").join("").trim();
     const cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
     const s = cleanText.indexOf("{"), e = cleanText.lastIndexOf("}");
     if (s === -1 || e === -1)
@@ -353,8 +300,8 @@ ${prevContext}
     const roster   = Array.isArray(rosterJson) ? rosterJson : [];
     const present  = [], uncertain = [], outOfList = [];
     const usedIds  = new Set();
+    const confidenceScores = {};
 
-    const confidenceScores = {}; // num -> score (0-100)
     for (const rawName of rawNames) {
       const result = matchName(rawName, roster);
       if (result.type === "outOfList") {
@@ -384,7 +331,11 @@ ${prevContext}
       }
     }
 
-    return res.status(200).json({ present, uncertain, outOfList, flags: [], extractedCount: rawNames.length, scores: confidenceScores });
+    return res.status(200).json({
+      present, uncertain, outOfList, flags: [],
+      extractedCount: rawNames.length,
+      scores: confidenceScores,
+    });
 
   } catch (err) {
     console.error("Crash:", err);
