@@ -354,13 +354,15 @@ ${prevContext}
     const present  = [], uncertain = [], outOfList = [];
     const usedIds  = new Set();
 
+    const confidenceScores = {}; // num -> score (0-100)
     for (const rawName of rawNames) {
       const result = matchName(rawName, roster);
       if (result.type === "outOfList") {
         outOfList.push(rawName);
       } else if (result.type === "confident") {
         if (!usedIds.has(result.num)) {
-          present.push({ num: result.num, rawName, confident: true });
+          present.push({ num: result.num, rawName, confident: true, score: result.score });
+          confidenceScores[result.num] = result.score;
           usedIds.add(result.num);
         }
       } else {
@@ -368,7 +370,8 @@ ${prevContext}
         if (available.length === 0) {
           outOfList.push(rawName);
         } else if (available.length === 1) {
-          present.push({ num: available[0].num, rawName, confident: true });
+          present.push({ num: available[0].num, rawName, confident: true, score: available[0].score });
+          confidenceScores[available[0].num] = available[0].score;
           usedIds.add(available[0].num);
         } else {
           uncertain.push({
@@ -381,7 +384,7 @@ ${prevContext}
       }
     }
 
-    return res.status(200).json({ present, uncertain, outOfList, flags: [], extractedCount: rawNames.length });
+    return res.status(200).json({ present, uncertain, outOfList, flags: [], extractedCount: rawNames.length, scores: confidenceScores });
 
   } catch (err) {
     console.error("Crash:", err);
