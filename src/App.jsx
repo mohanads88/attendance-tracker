@@ -432,13 +432,13 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
 
   // "needs review": present but confidence < 90, or manually overridden
   const needsReviewCount=useMemo(()=>
-    merged.filter(m=>m.present&&m.confidence>0&&m.confidence<100).length
+    merged.filter(m=>m.present&&m.confidence>0&&m.confidence<85).length
   ,[merged]);
 
   const filtered=useMemo(()=>merged.filter(m=>{
     if(filter==="present") return m.present;
     if(filter==="absent") return!m.present;
-    if(filter==="review") return m.present&&m.confidence>0&&m.confidence<100;
+    if(filter==="review") return m.present&&m.confidence>0&&m.confidence<85;
     return true;
   }),[merged,filter]);
 
@@ -519,7 +519,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
                   <td style={{...td,fontSize:12,color:m.evidence?C.ink:C.muted,fontStyle:m.evidence?"normal":"italic"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
                       <span>{m.evidence||"—"}</span>
-                      {m.present&&m.confidence>0&&m.confidence<100&&(
+                      {m.present&&m.confidence>0&&m.confidence<85&&(
                         <span title={`نسبة التطابق: ${m.confidence}%`} style={{background:C.orangeSoft,color:C.orange,borderRadius:10,padding:"2px 7px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
                           {m.confidence}% ⚠️
                         </span>
