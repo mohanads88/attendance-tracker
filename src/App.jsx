@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import {
   Users, ScanLine, ClipboardList, Plus, Trash2, Download, Loader2,
   Check, X, AlertTriangle, Upload, Pencil, RotateCcw, CloudOff,
-  RefreshCw, ChevronDown, ChevronUp, HelpCircle, CheckCircle2
+  RefreshCw, ChevronDown, ChevronUp, HelpCircle, CheckCircle2, UserPlus
 } from "lucide-react";
 import { loadRoster, saveRoster, watchRoster } from "./firebase";
 
@@ -69,6 +69,7 @@ const C={
   gold:"#c8891b",goldSoft:"#fbf1dc",bg:"#f6f5f1",card:"#ffffff",line:"#e2e0d8",
   present:"#0b6b4f",presentSoft:"#e6f2ec",absent:"#b23b3b",absentSoft:"#f8e8e8",
   muted:"#6b6f6a",blue:"#1d6fa4",blueSoft:"#e8f2fa",orange:"#c05c00",orangeSoft:"#fdf0e6",
+  purple:"#5b3fa8",purpleSoft:"#f0ecff",
 };
 const FONT=`'Tajawal', system-ui, sans-serif`;
 
@@ -92,7 +93,6 @@ async function fileToImage(file){
   return{name:file.name,dataUrl,b64:dataUrl.split(",")[1],mediaType:"image/jpeg"};
 }
 
-// periodPresent = [{num, rawName}] from already-resolved period 1 (passed to period 2)
 async function analyzePeriod(images,roster,periodPresent=[]){
   const rosterText=roster.map(m=>`${m.id}. ${m.name} — ${m.position}`).join("\n");
   const rosterJson=roster.map(m=>({id:m.id,name:m.name,position:m.position}));
@@ -100,52 +100,31 @@ async function analyzePeriod(images,roster,periodPresent=[]){
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
-      rosterText,
-      rosterJson,
+      rosterText,rosterJson,
       images:images.map(im=>({mimeType:im.mediaType,data:im.b64})),
       previousPresent:periodPresent,
     }),
   });
   const data=await resp.json();
-  if(!resp.ok) throw new Error(data.error||"تعذّر التحليل");
-  return{
-    present:data.present||[],       // [{num, rawName, confident}]
-    uncertain:data.uncertain||[],   // [{rawName, possibleMatches, issue, suggestedAction}]
-    outOfList:data.outOfList||[],
-    flags:data.flags||[],
-  };
+  if(!resp.ok) throw new Error(data.error||"فشل التحليل — تحقق من عدد اللقطات أو اتصالك بالإنترنت");
+  const present={};
+  (data.present||[]).forEach(p=>{if(p&&p.num) present[p.num]=p.rawName||"";});
+  return{present,uncertain:data.uncertain||[],outOfList:data.outOfList||[],flags:data.flags||[]};
 }
 
-// State shape for each period
-const EMPTY_PERIOD={
-  images:[],
-  // raw from API
-  present:[],       // [{num, rawName, confident}]
-  uncertain:[],     // [{rawName, possibleMatches, issue, suggestedAction}]
-  outOfList:[],
-  flags:[],
-  // resolved by user
-  resolved:{},      // { rawName -> num | "outOfList" | "skip" }
-  analyzing:false,
-  analyzed:false,
-  error:null,
-};
+const EMPTY_PERIOD={images:[],present:{},uncertain:[],outOfList:[],flags:[],resolved:{},analyzing:false,analyzed:false,error:null};
 
-// Build the final present map {num -> rawName} after user resolutions
 function buildPresent(period){
   const map={};
-  // Confident matches go straight in
-  period.present.forEach(p=>{if(p.num) map[p.num]=p.rawName||"";});
-  // User-resolved uncertain
-  Object.entries(period.resolved).forEach(([rawName,decision])=>{
+  period.present&&Object.entries(period.present).forEach(([num,raw])=>{map[parseInt(num)]=raw;});
+  Object.entries(period.resolved||{}).forEach(([rawName,decision])=>{
     if(typeof decision==="number") map[decision]=rawName;
-    // "outOfList" and "skip" → don't add to present
   });
   return map;
 }
 
 function pendingUncertain(period){
-  return period.uncertain.filter(u=>period.resolved[u.rawName]===undefined);
+  return(period.uncertain||[]).filter(u=>(period.resolved||{})[u.rawName]===undefined);
 }
 
 export default function App(){
@@ -174,7 +153,6 @@ export default function App(){
   const persist=async next=>{setRoster(next);try{await saveRoster(next);}catch(e){setOffline(true);}};
   const resetMeeting=()=>{setP1(EMPTY_PERIOD);setP2(EMPTY_PERIOD);setOverrides({});};
 
-  // final maps used in merged
   const p1Present=useMemo(()=>buildPresent(p1),[p1]);
   const p2Present=useMemo(()=>buildPresent(p2),[p2]);
 
@@ -199,12 +177,15 @@ export default function App(){
     };
   },[merged,roster]);
 
-  const outOfList=useMemo(()=>{
+  // Collect all out-of-list names from both periods (no decisions needed)
+  const extraAttendees=useMemo(()=>{
     const set=new Map();
-    [...p1.outOfList,...p2.outOfList].forEach(n=>{const k=String(n).trim();if(k)set.set(k,k);});
+    [...(p1.outOfList||[]),...(p2.outOfList||[])].forEach(n=>{
+      const k=String(n).trim();if(k) set.set(k,k);
+    });
     // user-resolved as outOfList
-    Object.entries(p1.resolved).forEach(([n,d])=>{if(d==="outOfList")set.set(n,n);});
-    Object.entries(p2.resolved).forEach(([n,d])=>{if(d==="outOfList")set.set(n,n);});
+    Object.entries(p1.resolved||{}).forEach(([n,d])=>{if(d==="outOfList")set.set(n,n);});
+    Object.entries(p2.resolved||{}).forEach(([n,d])=>{if(d==="outOfList")set.set(n,n);});
     return[...set.values()];
   },[p1,p2]);
 
@@ -214,6 +195,7 @@ export default function App(){
   const totalPending=p1Pending+p2Pending;
 
   const setOverride=(id,period,val)=>setOverrides(prev=>({...prev,[id]:{...(prev[id]||{}),[period]:val}}));
+  const p1Done=p1.analyzed&&p1Pending===0;
 
   if(!loaded) return<div dir="rtl" style={{fontFamily:FONT,padding:40,textAlign:"center",color:C.muted}}>جارٍ التحميل…</div>;
 
@@ -243,18 +225,18 @@ export default function App(){
             ["analyze","التحليل",ScanLine,totalPending>0?totalPending:null,"orange"],
             ["results","النتيجة",ClipboardList,hasResults?stats.present:null,"green"],
             ["roster","قائمة المدعوين",Users,null,null],
-          ].map(([key,label,Icon,badge,badgeColor])=>(
+          ].map(([key,label,Icon,badge,bc])=>(
             <button key={key} onClick={()=>setTab(key)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"14px 16px",fontSize:15,fontWeight:700,color:tab===key?C.green:C.muted,borderBottom:tab===key?`3px solid ${C.green}`:"3px solid transparent",marginBottom:-1}}>
               <Icon size={17}/>{label}
-              {badge!=null&&<span style={{background:badgeColor==="orange"?C.orangeSoft:C.greenSoft,color:badgeColor==="orange"?C.orange:C.green,borderRadius:20,padding:"1px 9px",fontSize:12,fontWeight:700}}>{badge}</span>}
+              {badge!=null&&<span style={{background:bc==="orange"?C.orangeSoft:C.greenSoft,color:bc==="orange"?C.orange:C.green,borderRadius:20,padding:"1px 9px",fontSize:12,fontWeight:700}}>{badge}</span>}
             </button>
           ))}
         </div>
       </nav>
 
       <main style={{maxWidth:1100,margin:"0 auto",padding:"22px 16px 60px"}}>
-        {tab==="analyze"&&<AnalyzeTab roster={roster} p1={p1} setP1={setP1} p2={p2} setP2={setP2} p1Present={p1Present} onDone={()=>setTab("results")}/>}
-        {tab==="results"&&<ResultsTab merged={merged} stats={stats} outOfList={outOfList} setOverride={setOverride} p1={p1} p2={p2} roster={roster} onGoAnalyze={()=>setTab("analyze")}/>}
+        {tab==="analyze"&&<AnalyzeTab roster={roster} p1={p1} setP1={setP1} p2={p2} setP2={setP2} p1Present={p1Present} p1Done={p1Done} onDone={()=>setTab("results")}/>}
+        {tab==="results"&&<ResultsTab merged={merged} stats={stats} extraAttendees={extraAttendees} setOverride={setOverride} p1={p1} p2={p2} roster={roster} onGoAnalyze={()=>setTab("analyze")}/>}
         {tab==="roster"&&<RosterTab roster={roster} persist={persist}/>}
       </main>
     </div>
@@ -262,39 +244,23 @@ export default function App(){
 }
 
 // ======================== Analyze Tab ========================
-function AnalyzeTab({roster,p1,setP1,p2,setP2,p1Present,onDone}){
-  const p1Done=p1.analyzed&&pendingUncertain(p1).length===0;
-  const p2CanStart=p1Done;
-
+function AnalyzeTab({roster,p1,setP1,p2,setP2,p1Present,p1Done,onDone}){
   return(
     <div>
-      {/* Step 1 */}
       <StepHeader n={1} label="الفترة الأولى" done={p1Done}/>
       <PeriodCard state={p1} setState={setP1} roster={roster} previousPresent={[]}/>
+      {p1.analyzed&&p1.uncertain.length>0&&<UncertainResolver period={p1} setPeriod={setP1} roster={roster}/>}
 
-      {/* Uncertain resolver for P1 */}
-      {p1.analyzed&&p1.uncertain.length>0&&(
-        <UncertainResolver period={p1} setPeriod={setP1} roster={roster}/>
-      )}
-
-      {/* Step 2 — unlocks after P1 resolved */}
       <StepHeader n={2} label="الفترة الثانية" done={p2.analyzed&&pendingUncertain(p2).length===0} locked={!p1Done}/>
-      {!p1Done&&(
-        <div style={{...card,textAlign:"center",color:C.muted,padding:"24px",marginBottom:20}}>
-          أكمل تحليل الفترة الأولى وحلّ جميع الحالات الغامضة أولاً — ثم تُفتح الفترة الثانية.
-        </div>
-      )}
-      {p1Done&&(
-        <>
+      {!p1Done
+        ?<div style={{...card,textAlign:"center",color:C.muted,padding:"24px",marginBottom:20}}>أكمل تحليل الفترة الأولى وحلّ جميع الحالات الغامضة أولاً</div>
+        :<>
           <PeriodCard state={p2} setState={setP2} roster={roster}
             previousPresent={Object.entries(p1Present).map(([num,rawName])=>({num:parseInt(num),rawName}))}/>
-          {p2.analyzed&&p2.uncertain.length>0&&(
-            <UncertainResolver period={p2} setPeriod={setP2} roster={roster}/>
-          )}
+          {p2.analyzed&&p2.uncertain.length>0&&<UncertainResolver period={p2} setPeriod={setP2} roster={roster}/>}
         </>
-      )}
+      }
 
-      {/* Go to results */}
       {p1Done&&p2.analyzed&&pendingUncertain(p2).length===0&&(
         <div style={{textAlign:"center",marginTop:20}}>
           <button onClick={onDone} style={btnPrimary}>عرض النتيجة النهائية ←</button>
@@ -319,6 +285,9 @@ function StepHeader({n,label,done,locked}){
 
 function PeriodCard({state,setState,roster,previousPresent}){
   const inputRef=useRef();
+  const confidentCount=Object.keys(state.present||{}).length;
+  const uncertainCount=(state.uncertain||[]).length;
+
   const onFiles=async files=>{
     const arr=await Promise.all([...files].map(fileToImage));
     setState(s=>({...s,images:[...s.images,...arr]}));
@@ -329,16 +298,13 @@ function PeriodCard({state,setState,roster,previousPresent}){
       const r=await analyzePeriod(state.images,roster,previousPresent);
       setState(s=>({...s,...r,resolved:{},analyzing:false,analyzed:true}));
     }catch(e){
-      setState(s=>({...s,analyzing:false,error:e.message||"فشل التحليل — تحقق من عدد اللقطات أو اتصالك بالإنترنت"}));
+      setState(s=>({...s,analyzing:false,error:e.message||"حدث خطأ"}));
     }
   };
   const removeImage=i=>setState(s=>({...s,images:s.images.filter((_,idx)=>idx!==i)}));
-  const confidentCount=state.present.filter(p=>p.confident).length;
-  const uncertainCount=state.uncertain.length;
 
   return(
-    <div style={{...card,marginBottom:uncertainCount>0&&state.analyzed?0:16,borderBottomLeftRadius:uncertainCount>0&&state.analyzed?0:16,borderBottomRightRadius:uncertainCount>0&&state.analyzed?0:16}}>
-      {/* Drop zone */}
+    <div style={{...card,marginBottom:16}}>
       <div onClick={()=>inputRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onFiles(e.dataTransfer.files);}}
         style={{border:`2px dashed ${C.line}`,borderRadius:12,padding:"16px",textAlign:"center",cursor:"pointer",background:C.bg,marginBottom:state.images.length?12:0}}>
         <Upload size={20} color={C.green}/>
@@ -381,11 +347,11 @@ function PeriodCard({state,setState,roster,previousPresent}){
 // ======================== Uncertain Resolver ========================
 function UncertainResolver({period,setPeriod,roster}){
   const pending=pendingUncertain(period);
-  const resolved=Object.keys(period.resolved).length;
-  const total=period.uncertain.length;
+  const resolved=Object.keys(period.resolved||{}).length;
+  const total=(period.uncertain||[]).length;
 
   const resolve=(rawName,decision)=>{
-    setPeriod(p=>({...p,resolved:{...p.resolved,[rawName]:decision}}));
+    setPeriod(p=>({...p,resolved:{...(p.resolved||{}),[rawName]:decision}}));
   };
 
   if(pending.length===0&&total>0){
@@ -397,21 +363,18 @@ function UncertainResolver({period,setPeriod,roster}){
   }
 
   return(
-    <div style={{borderTop:"none",border:`1px solid ${C.line}`,borderTop:"none",borderRadius:"0 0 16px 16px",marginBottom:16,overflow:"hidden"}}>
-      {/* Header */}
+    <div style={{border:`1px solid ${C.line}`,borderTop:"none",borderRadius:"0 0 16px 16px",marginBottom:16,overflow:"hidden"}}>
       <div style={{background:C.orangeSoft,borderTop:`2px solid ${C.orange}`,padding:"12px 18px",display:"flex",alignItems:"center",gap:10}}>
         <HelpCircle size={18} color={C.orange}/>
         <div style={{flex:1}}>
           <div style={{fontWeight:800,fontSize:15,color:C.orange}}>حالات تحتاج قرارك — {pending.length} متبقية من {total}</div>
-          <div style={{fontSize:12,color:C.muted,marginTop:2}}>اختر الإجراء المناسب لكل اسم ظهر في اللقطة</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}>اختر الإجراء المناسب لكل اسم</div>
         </div>
         <div style={{fontSize:13,color:C.muted}}>{resolved}/{total} تم</div>
       </div>
 
-      {/* Pending items */}
       {pending.map((u,i)=>(
         <div key={i} style={{padding:"16px 18px",borderBottom:`1px solid ${C.line}`,background:"#fff"}}>
-          {/* Raw name badge */}
           <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
             <span style={{background:"#f0f0ee",borderRadius:8,padding:"4px 10px",fontSize:14,fontWeight:700,color:C.ink,whiteSpace:"nowrap"}}>"{u.rawName}"</span>
             <div>
@@ -420,7 +383,6 @@ function UncertainResolver({period,setPeriod,roster}){
             </div>
           </div>
 
-          {/* Possible matches */}
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {(u.possibleMatches||[]).map((m,j)=>(
               <button key={j} onClick={()=>resolve(u.rawName,m.num)}
@@ -435,37 +397,29 @@ function UncertainResolver({period,setPeriod,roster}){
               </button>
             ))}
 
-            {/* Out of list option */}
             <button onClick={()=>resolve(u.rawName,"outOfList")}
-              style={{display:"flex",alignItems:"center",gap:12,background:C.goldSoft,border:`1.5px solid ${C.gold}40`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
-              <div style={{width:28,height:28,borderRadius:"50%",background:C.gold,color:"#fff",display:"grid",placeItems:"center",flexShrink:0}}><Users size={14}/></div>
-              <div style={{flex:1,fontWeight:600,fontSize:14,color:"#7a5300"}}>ليس من المدعوين — إضافة لقائمة الحضور الإضافي</div>
+              style={{display:"flex",alignItems:"center",gap:12,background:"#f5f5f3",border:`1.5px solid ${C.line}`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:C.muted,color:"#fff",display:"grid",placeItems:"center",flexShrink:0}}><UserPlus size={14}/></div>
+              <div style={{flex:1,fontWeight:600,fontSize:14,color:C.muted}}>ليس من المدعوين — أضفه لقائمة الحضور الإضافي</div>
             </button>
 
-            {/* Skip option */}
             <button onClick={()=>resolve(u.rawName,"skip")}
               style={{display:"flex",alignItems:"center",gap:12,background:"#f5f5f3",border:`1.5px solid ${C.line}`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
-              <div style={{width:28,height:28,borderRadius:"50%",background:C.muted,color:"#fff",display:"grid",placeItems:"center",flexShrink:0}}><X size={14}/></div>
-              <div style={{flex:1,fontWeight:600,fontSize:14,color:C.muted}}>تجاهل — لا يُعدّ حاضراً</div>
+              <div style={{width:28,height:28,borderRadius:"50%",background:"#bbb",color:"#fff",display:"grid",placeItems:"center",flexShrink:0}}><X size={14}/></div>
+              <div style={{flex:1,fontWeight:600,fontSize:14,color:C.muted}}>تجاهل</div>
             </button>
           </div>
         </div>
       ))}
-
-      {/* Already resolved items (collapsed summary) */}
-      {resolved>0&&pending.length>0&&(
-        <div style={{padding:"10px 18px",background:"#fafaf8",fontSize:13,color:C.muted}}>
-          ✓ تم حل {resolved} حالة سابقاً
-        </div>
-      )}
     </div>
   );
 }
 
 // ======================== Results Tab ========================
-function ResultsTab({merged,stats,outOfList,setOverride,p1,p2,roster,onGoAnalyze}){
+function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAnalyze}){
   const[filter,setFilter]=useState("all");
-  const[showOut,setShowOut]=useState(false);
+  const[showExtra,setShowExtra]=useState(false);
+  const noData=!p1.analyzed&&!p2.analyzed;
 
   const filtered=useMemo(()=>merged.filter(m=>{
     if(filter==="present") return m.present;
@@ -474,31 +428,45 @@ function ResultsTab({merged,stats,outOfList,setOverride,p1,p2,roster,onGoAnalyze
   }),[merged,filter]);
 
   const exportExcel=()=>{
-    const header=["م","الاسم","المنصب","الفترة الأولى","الفترة الثانية","الحالة","الاسم في اللقطة"];
+    const wb=XLSX.utils.book_new();
+    wb.Workbook={Views:[{RTL:true}]};
+
+    // Sheet 1: Main roster
+    const h1=["م","الاسم","المنصب","الفترة الأولى","الفترة الثانية","الحالة","الاسم في اللقطة"];
     const body=merged.map(m=>[m.id,m.name,m.position,m.inP1?"حضر":"—",m.inP2?"حضر":"—",m.present?"حضر":"لم يحضر",m.evidence||""]);
     const summary=[[],["الملخص"],["إجمالي المدعوين",stats.total],["الحاضرون",stats.present],["الغائبون",stats.absent],["حضر في الفترتين",stats.both],["الفترة الأولى فقط",stats.only1],["الفترة الثانية فقط",stats.only2],["نسبة الحضور",stats.pct/100]];
-    const extra=outOfList.length?[[],["حضور إضافي"],...outOfList.map((n,i)=>[i+1,n])]:[];
-    const ws=XLSX.utils.aoa_to_sheet([header,...body,...summary,...extra]);
-    ws["!cols"]=[{wch:5},{wch:30},{wch:42},{wch:12},{wch:12},{wch:10},{wch:34}];
-    const pctCell=`B${1+body.length+10}`;if(ws[pctCell])ws[pctCell].z="0.0%";
-    const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
-    XLSX.utils.book_append_sheet(wb,ws,"الحضور");
+    const ws1=XLSX.utils.aoa_to_sheet([h1,...body,...summary]);
+    ws1["!cols"]=[{wch:5},{wch:32},{wch:42},{wch:12},{wch:12},{wch:10},{wch:34}];
+    const pctCell=`B${1+body.length+10}`;if(ws1[pctCell])ws1[pctCell].z="0.0%";
+    XLSX.utils.book_append_sheet(wb,ws1,"قائمة المدعوين");
+
+    // Sheet 2: Extra attendees
+    if(extraAttendees.length>0){
+      const h2=["م","الاسم (كما ظهر في اللقطة)"];
+      const body2=extraAttendees.map((n,i)=>[i+1,n]);
+      const ws2=XLSX.utils.aoa_to_sheet([h2,...body2]);
+      ws2["!cols"]=[{wch:5},{wch:40}];
+      XLSX.utils.book_append_sheet(wb,ws2,"حضور إضافي");
+    }
+
     XLSX.writeFile(wb,"كشف_حضور_الاجتماع.xlsx");
   };
 
-  const noData=!p1.analyzed&&!p2.analyzed;
-
   return(
     <div>
+      {/* Stats — clickable filters */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:18}}>
-        <Stat n={stats.present} label="حاضر" color={C.present} bg={C.presentSoft} active={filter==="present"} onClick={()=>setFilter(f=>f==="present"?"all":"present")}/>
+        <Stat n={stats.present} label="حاضر من القائمة" color={C.present} bg={C.presentSoft} active={filter==="present"} onClick={()=>setFilter(f=>f==="present"?"all":"present")}/>
         <Stat n={stats.absent} label="غائب" color={C.absent} bg={C.absentSoft} active={filter==="absent"} onClick={()=>setFilter(f=>f==="absent"?"all":"absent")}/>
         <Stat n={`${stats.pct}%`} label="نسبة الحضور" color={C.gold} bg={C.goldSoft}/>
         <Stat n={stats.total} label="إجمالي المدعوين" color={C.ink} bg="#eeece5" active={filter==="all"} onClick={()=>setFilter("all")}/>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
-        <div style={{fontSize:13,color:C.muted}}>الفترتان <b style={{color:C.ink}}>{stats.both}</b> · الأولى فقط <b style={{color:C.ink}}>{stats.only1}</b> · الثانية فقط <b style={{color:C.ink}}>{stats.only2}</b></div>
+        <div style={{fontSize:13,color:C.muted}}>
+          الفترتان <b style={{color:C.ink}}>{stats.both}</b> · الأولى فقط <b style={{color:C.ink}}>{stats.only1}</b> · الثانية فقط <b style={{color:C.ink}}>{stats.only2}</b>
+          {filter!=="all"&&<span style={{marginInlineStart:10,background:C.goldSoft,color:C.gold,borderRadius:12,padding:"2px 10px",fontSize:12}}>عرض: {filter==="present"?"الحاضرون":"الغائبون"} ({filtered.length})</span>}
+        </div>
         <div style={{display:"flex",gap:8,marginInlineStart:"auto"}}>
           <button onClick={onGoAnalyze} style={btnGhost}><RefreshCw size={15}/> تعديل اللقطات</button>
           <button onClick={exportExcel} disabled={noData} style={{...btnPrimary,opacity:noData?0.5:1}}><Download size={17}/> تصدير Excel</button>
@@ -507,12 +475,16 @@ function ResultsTab({merged,stats,outOfList,setOverride,p1,p2,roster,onGoAnalyze
 
       {noData&&<div style={{...card,textAlign:"center",color:C.muted,padding:"40px 20px",marginBottom:16}}>لا توجد نتائج بعد. <button onClick={onGoAnalyze} style={{background:"none",border:"none",color:C.green,fontWeight:700,cursor:"pointer",fontSize:"inherit"}}>ارفع اللقطات وحلّل →</button></div>}
 
-      <div style={{...card,padding:0,overflow:"hidden"}}>
+      {/* ── Section 1: Main roster ── */}
+      <div style={{...card,padding:0,overflow:"hidden",marginBottom:16}}>
+        <div style={{background:C.greenDark,color:"#fff",padding:"12px 16px",fontWeight:800,fontSize:15}}>
+          قائمة المدعوين ({stats.total})
+        </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
             <thead>
-              <tr style={{background:C.greenDark,color:"#fff"}}>
-                <th style={{...th,width:42}}>م</th>
+              <tr style={{background:"#f0f4f2"}}>
+                <th style={{...th,width:42,color:C.muted}}>م</th>
                 <th style={th}>الاسم</th>
                 <th style={{...th,textAlign:"center",width:70}}>ف١</th>
                 <th style={{...th,textAlign:"center",width:70}}>ف٢</th>
@@ -536,14 +508,39 @@ function ResultsTab({merged,stats,outOfList,setOverride,p1,p2,roster,onGoAnalyze
         </div>
       </div>
 
-      {outOfList.length>0&&(
-        <div style={{...card,marginTop:16}}>
-          <button onClick={()=>setShowOut(v=>!v)} style={{background:"none",border:"none",display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:15,color:C.gold,cursor:"pointer",width:"100%",textAlign:"right"}}>
-            حضور إضافي خارج القائمة ({outOfList.length}){showOut?<ChevronUp size={16}/>:<ChevronDown size={16}/>}
-          </button>
-          {showOut&&<div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>{outOfList.map((n,i)=><span key={i} style={{background:C.goldSoft,border:"1px solid #ecd9a8",borderRadius:20,padding:"5px 12px",fontSize:13,color:"#6f4e12"}}>{n}</span>)}</div>}
-        </div>
-      )}
+      {/* ── Section 2: Extra attendees (collapsed by default) ── */}
+      <div style={{...card,padding:0,overflow:"hidden"}}>
+        <button onClick={()=>setShowExtra(v=>!v)}
+          style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"none",border:"none",textAlign:"right",cursor:"pointer"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.purpleSoft,display:"grid",placeItems:"center",flexShrink:0}}>
+            <UserPlus size={18} color={C.purple}/>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:800,fontSize:15,color:C.purple}}>
+              حضور إضافي — خارج قائمة المدعوين ({extraAttendees.length})
+            </div>
+            <div style={{fontSize:12,color:C.muted,marginTop:2}}>
+              هؤلاء حضروا لكنهم ليسوا من المدعوين الأساسيين — للتوثيق فقط
+            </div>
+          </div>
+          {showExtra?<ChevronUp size={18} color={C.muted}/>:<ChevronDown size={18} color={C.muted}/>}
+        </button>
+
+        {showExtra&&(
+          <div style={{borderTop:`1px solid ${C.line}`,padding:"12px 16px"}}>
+            {extraAttendees.length===0
+              ?<div style={{textAlign:"center",color:C.muted,padding:"16px 0",fontSize:14}}>لا يوجد حضور إضافي</div>
+              :<div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                {extraAttendees.map((n,i)=>(
+                  <span key={i} style={{background:C.purpleSoft,border:`1px solid ${C.purple}30`,borderRadius:20,padding:"6px 14px",fontSize:13,color:C.purple,fontWeight:600}}>
+                    {n}
+                  </span>
+                ))}
+              </div>
+            }
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -563,7 +560,7 @@ function RosterTab({roster,persist}){
   const remove=id=>persist(roster.filter(r=>r.id!==id));
   const startEdit=r=>{setEditId(r.id);setDraft({name:r.name,position:r.position});};
   const save=()=>{persist(roster.map(r=>r.id===editId?{...r,name:draft.name.trim()||r.name,position:draft.position}:r));setEditId(null);};
-  const resetDefault=()=>{if(confirm("استرجاع قائمة المدعوين الأصلية (52)؟")) persist(DEFAULT_ROSTER);};
+  const resetDefault=()=>{if(confirm("استرجاع قائمة المدعوين الأصلية (54)؟")) persist(DEFAULT_ROSTER);};
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
