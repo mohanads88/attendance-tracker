@@ -14,6 +14,7 @@ const DEFAULT_ROSTER = [
   ["م. بندر بن عبد الله الحربي","الرئيس التنفيذي لقطاع الأمانة شرق الرياض"],
   ["د. فلاح بن عبد الله الدوسري","الرئيس التنفيذي لقطاع الأمانة جنوب الرياض"],
   ["م. عبد الله بن عبد المحسن الماضي","الرئيس التنفيذي لقطاع الأمانة غرب الرياض"],
+  ["د. فيصل بن سلطان العصيمي","وكيل الأمانة المساعد للتعمير"],
   ["ماجد بن عثمان الدغفق","المشرف العام على مركز تجربة العميل"],
   ["م. عبد العزيز بن أحمد بن عقيل","نائب الرئيس التنفيذي لقطاع الأمانة شمال الرياض"],
   ["محمد بن إبراهيم السياري","نائب الرئيس التنفيذي لقطاع الأمانة وسط الرياض"],
@@ -61,7 +62,6 @@ const DEFAULT_ROSTER = [
   ["م. أحمد بن اشريدة الرويلي","مدير إدارة الموائمة التشغيلية"],
   ["م. بندر بن عبد العزيز الكثيري","وكالة التحول الرقمي والمدن الذكية"],
   ["مهدي بن هادي آل حيدر","ممثل الوكالة المساعدة للمشاركة المجتمعية"],
-  ["د. فيصل بن سلطان العصيمي","وكيل الأمانة المساعد للتعمير"],
 ].map(([name,position],i)=>({id:i+1,name,position}));
 
 const C={
@@ -581,28 +581,97 @@ function Stat({n,label,color,bg,active,onClick}){
 function RosterTab({roster,persist}){
   const[editId,setEditId]=useState(null);
   const[draft,setDraft]=useState({name:"",position:""});
-  const add=()=>{const id=(roster.reduce((mx,r)=>Math.max(mx,r.id),0)||0)+1;persist([...roster,{id,name:"اسم جديد",position:""}]);setEditId(id);setDraft({name:"اسم جديد",position:""});};
-  const remove=id=>persist(roster.filter(r=>r.id!==id));
+  const[dragIdx,setDragIdx]=useState(null);
+  const[dragOverIdx,setDragOverIdx]=useState(null);
+
+  // Renumber roster sequentially after any change
+  const renumber=items=>items.map((r,i)=>({...r,id:i+1}));
+
+  const add=()=>{
+    const next=renumber([...roster,{id:0,name:"اسم جديد",position:""}]);
+    persist(next);
+    setEditId(next[next.length-1].id);
+    setDraft({name:"اسم جديد",position:""});
+  };
+
+  const remove=id=>persist(renumber(roster.filter(r=>r.id!==id)));
+
   const startEdit=r=>{setEditId(r.id);setDraft({name:r.name,position:r.position});};
-  const save=()=>{persist(roster.map(r=>r.id===editId?{...r,name:draft.name.trim()||r.name,position:draft.position}:r));setEditId(null);};
+
+  const save=()=>{
+    persist(renumber(roster.map(r=>r.id===editId?{...r,name:draft.name.trim()||r.name,position:draft.position}:r)));
+    setEditId(null);
+  };
+
   const resetDefault=()=>{if(confirm("استرجاع قائمة المدعوين الأصلية (54)؟")) persist(DEFAULT_ROSTER);};
+
+  // Drag-and-drop reorder
+  const onDragStart=(e,idx)=>{setDragIdx(idx);e.dataTransfer.effectAllowed="move";};
+  const onDragOver=(e,idx)=>{e.preventDefault();setDragOverIdx(idx);};
+  const onDrop=(e,idx)=>{
+    e.preventDefault();
+    if(dragIdx===null||dragIdx===idx){setDragIdx(null);setDragOverIdx(null);return;}
+    const next=[...roster];
+    const[moved]=next.splice(dragIdx,1);
+    next.splice(idx,0,moved);
+    persist(renumber(next));
+    setDragIdx(null);setDragOverIdx(null);
+  };
+  const onDragEnd=()=>{setDragIdx(null);setDragOverIdx(null);};
+
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-        <div style={{fontSize:14,color:C.muted}}>عدد المدعوين: <b style={{color:C.ink}}>{roster.length}</b> — تُحفظ وتُشارَك تلقائيًا</div>
+        <div style={{fontSize:14,color:C.muted}}>
+          عدد المدعوين: <b style={{color:C.ink}}>{roster.length}</b> — اسحب ↕ لإعادة الترتيب — تُحفظ وتُشارَك تلقائيًا
+        </div>
         <button onClick={add} style={{...btnPrimary,marginInlineStart:"auto"}}><Plus size={16}/> إضافة مدعو</button>
         <button onClick={resetDefault} style={btnGhost}><RotateCcw size={15}/> استرجاع الأصلية</button>
       </div>
       <div style={{...card,padding:0,overflow:"hidden"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
-          <thead><tr style={{background:C.greenDark,color:"#fff"}}><th style={{...th,width:42}}>م</th><th style={th}>الاسم</th><th style={th}>المنصب</th><th style={{...th,width:90}}></th></tr></thead>
+          <thead>
+            <tr style={{background:C.greenDark,color:"#fff"}}>
+              <th style={{...th,width:32}}></th>
+              <th style={{...th,width:42}}>م</th>
+              <th style={th}>الاسم</th>
+              <th style={th}>المنصب</th>
+              <th style={{...th,width:90}}></th>
+            </tr>
+          </thead>
           <tbody>
-            {roster.map(r=>(
-              <tr key={r.id} style={{borderBottom:`1px solid ${C.line}`}}>
-                <td style={{...td,textAlign:"center",color:C.muted}}>{r.id}</td>
+            {roster.map((r,idx)=>(
+              <tr key={r.id}
+                draggable
+                onDragStart={e=>onDragStart(e,idx)}
+                onDragOver={e=>onDragOver(e,idx)}
+                onDrop={e=>onDrop(e,idx)}
+                onDragEnd={onDragEnd}
+                style={{
+                  borderBottom:`1px solid ${C.line}`,
+                  background:dragOverIdx===idx?"#e8f4ee":dragIdx===idx?"#f5f5f3":"#fff",
+                  transition:"background 0.15s",
+                  opacity:dragIdx===idx?0.5:1,
+                }}>
+                <td style={{...td,textAlign:"center",color:"#ccc",cursor:"grab",fontSize:18,paddingInline:4}}>⠿</td>
+                <td style={{...td,textAlign:"center",color:C.muted,fontWeight:700}}>{r.id}</td>
                 {editId===r.id
-                  ?<><td style={td}><input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} style={inp}/></td><td style={td}><input value={draft.position} onChange={e=>setDraft({...draft,position:e.target.value})} style={inp}/></td><td style={{...td,whiteSpace:"nowrap"}}><button onClick={save} style={{...iconBtn,color:C.present}}><Check size={16}/></button><button onClick={()=>setEditId(null)} style={iconBtn}><X size={16}/></button></td></>
-                  :<><td style={{...td,fontWeight:700}}>{r.name}</td><td style={{...td,color:C.muted,fontSize:13}}>{r.position}</td><td style={{...td,whiteSpace:"nowrap"}}><button onClick={()=>startEdit(r)} style={iconBtn}><Pencil size={15}/></button><button onClick={()=>remove(r.id)} style={{...iconBtn,color:C.absent}}><Trash2 size={15}/></button></td></>
+                  ?<>
+                    <td style={td}><input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} style={inp} autoFocus/></td>
+                    <td style={td}><input value={draft.position} onChange={e=>setDraft({...draft,position:e.target.value})} style={inp}/></td>
+                    <td style={{...td,whiteSpace:"nowrap"}}>
+                      <button onClick={save} style={{...iconBtn,color:C.present}}><Check size={16}/></button>
+                      <button onClick={()=>setEditId(null)} style={iconBtn}><X size={16}/></button>
+                    </td>
+                  </>
+                  :<>
+                    <td style={{...td,fontWeight:700}}>{r.name}</td>
+                    <td style={{...td,color:C.muted,fontSize:13}}>{r.position}</td>
+                    <td style={{...td,whiteSpace:"nowrap"}}>
+                      <button onClick={()=>startEdit(r)} style={iconBtn}><Pencil size={15}/></button>
+                      <button onClick={()=>remove(r.id)} style={{...iconBtn,color:C.absent}}><Trash2 size={15}/></button>
+                    </td>
+                  </>
                 }
               </tr>
             ))}
