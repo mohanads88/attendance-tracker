@@ -197,7 +197,7 @@ function scoreMatch(rawName, member) {
 
 // ── Match one raw name against roster ──
 function matchName(rawName, roster) {
-  const CONFIDENT = 76, CANDIDATE = 50, GAP = 22;
+  const CONFIDENT = 76, CANDIDATE = 50, GAP = 15;
   const scores = roster
     .map(m => ({ member: m, score: scoreMatch(rawName, m) }))
     .sort((a, b) => b.score - a.score);
