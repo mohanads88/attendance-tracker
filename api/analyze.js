@@ -53,7 +53,7 @@ const TRANS = {
   alhaydar:"آل حيدر", alhaidar:"آل حيدر", haider:"حيدر",
   alhaydr:"آل حيدر", haydar:"حيدر", haidar:"حيدر",
   alhayder:"آل حيدر",
-  okaili:"العقيلي", okaely:"العقيلي",
+  okaili:"العقيلي", okaely:"العقيلي", alokaili:"العقيلي",
   alghofaili:"الغفيلي", alghufaili:"الغفيلي",
   alsubaie:"السبيعي", alsubaei:"السبيعي",
   // First names
@@ -93,9 +93,10 @@ const TRANS = {
 // ── Strip job title / position suffix from raw name ──
 // Handles cases like "بندر الزهراني مدير عام مدينتي..." or "نوره السبيعي - مكتب الحائر"
 function stripPosition(raw) {
-  // Strip after dash/em-dash only if meaningful content before it (min 5 chars)
-  const dashIdx = raw.search(/\s*[-|\u2013\u2014]\s*/);
-  if (dashIdx >= 5) raw = raw.slice(0, dashIdx).trim();
+  // Strip after dash/em-dash only if what follows looks like a position (not a name part like Al-Okaili)
+  // A position separator has a space before the dash; a compound name has no space (Al-Okaili)
+  const dashMatch = raw.match(/\s+[-\u2013\u2014]\s+/);  // space BEFORE dash = separator
+  if (dashMatch && dashMatch.index >= 5) raw = raw.slice(0, dashMatch.index).trim();
   // Strip known position keywords and everything after them (skip first 8 chars)
   const posKeywords = [
     "مدير", "رئيس", "نائب", "وكيل", "مساعد", "مشرف", "ممثل",
