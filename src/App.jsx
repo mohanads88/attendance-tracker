@@ -71,7 +71,7 @@ const C={
   muted:"#6b6f6a",blue:"#1d6fa4",blueSoft:"#e8f2fa",orange:"#c05c00",orangeSoft:"#fdf0e6",
   purple:"#5b3fa8",purpleSoft:"#f0ecff",
 };
-const FONT=`'Tajawal', system-ui, sans-serif`;
+const FONT=`'Bahij TheSansArabic', 'Tajawal', system-ui, sans-serif`;
 
 function downscale(file,maxDim=1200,quality=0.78){
   return new Promise((resolve,reject)=>{
@@ -210,7 +210,7 @@ export default function App(){
 
   return(
     <div dir="rtl" style={{fontFamily:FONT,background:C.bg,minHeight:"100vh",color:C.ink}}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+      <style>{`/* Bahij TheSansArabic loaded via @font-face in index.html */
         *{box-sizing:border-box}button{font-family:inherit;cursor:pointer}input{font-family:inherit}
         @keyframes spin{to{transform:rotate(360deg)}}
         .row-hover:hover{filter:brightness(0.97)}
