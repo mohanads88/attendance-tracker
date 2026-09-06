@@ -90,6 +90,29 @@ const TRANS = {
   tfaqih:"تغريد",
 };
 
+// ── Strip job title / position suffix from raw name ──
+// Handles cases like "بندر الزهراني مدير عام مدينتي..." or "نوره السبيعي - مكتب الحائر"
+function stripPosition(raw) {
+  // Strip after dash/em-dash only if meaningful content before it (min 5 chars)
+  const dashIdx = raw.search(/\s*[-|\u2013\u2014]\s*/);
+  if (dashIdx >= 5) raw = raw.slice(0, dashIdx).trim();
+  // Strip known position keywords and everything after them (skip first 8 chars)
+  const posKeywords = [
+    "مدير", "رئيس", "نائب", "وكيل", "مساعد", "مشرف", "ممثل",
+    "مكتب", "قطاع", "إدارة", "وكالة", "أمانة",
+    "director", "manager", "head", "chief", "deputy", "assistant"
+  ];
+  const lower = raw.toLowerCase();
+  for (const kw of posKeywords) {
+    const idx = lower.indexOf(kw, 8);
+    if (idx > 0) { raw = raw.slice(0, idx).trim(); break; }
+  }
+  // Max 4 tokens — keep only name parts
+  const tokens = raw.trim().split(/\s+/);
+  if (tokens.length > 4) raw = tokens.slice(0, 3).join(" ");
+  return raw.trim();
+}
+
 // ── Normalize Arabic string for comparison ──
 // Does NOT apply visual confusion rules (those are for the prompt only)
 function norm(str) {
@@ -124,6 +147,7 @@ function translateToken(token) {
 }
 
 function translateName(rawName) {
+  rawName = stripPosition(rawName); // remove job title/position suffix
   const clean = rawName.replace(/\(.*?\)/g, "").replace(/\S+@\S+/g, "").trim();
   return clean.split(/\s+/).map(translateToken).join(" ");
 }
