@@ -100,6 +100,12 @@ function norm(str) {
     .replace(/\u0629/g, "\u0647")                        // ة → ه
     .replace(/\u0649/g, "\u064a")                        // ى → ي
     .replace(/[\u064b-\u065f]/g, "")                     // strip tashkeel
+    // Normalize compound names written as two words → one word
+    .replace(/عبد الله/g, "عبدالله")
+    .replace(/عبد العزيز/g, "عبدالعزيز")
+    .replace(/عبد الرحمن/g, "عبدالرحمن")
+    .replace(/عبد الملك/g, "عبدالملك")
+    .replace(/عبد المحسن/g, "عبدالمحسن")
     .replace(/آل\s*/g, "")                               // آل حيدر → حيدر
     .replace(/^\u0627\u0644/, "")                        // strip ال at start
     .replace(/ \u0627\u0644/g, " ")                         // strip ال after space
@@ -159,6 +165,8 @@ function scoreTokenPair(src, tgt) {
 }
 
 // ── Score raw name against a roster member ──
+// Position-aware: first name matches first name, last name matches last name.
+// "أحمد" as father name does NOT match "أحمد" as first name.
 function scoreMatch(rawName, member) {
   const translated = norm(translateName(rawName));
   const target     = norm(member.name);
@@ -168,31 +176,37 @@ function scoreMatch(rawName, member) {
   const tgtTokens = target.split(" ").filter(t => t.length >= 2);
   if (!srcTokens.length || !tgtTokens.length) return 0;
 
-  // Full match score
-  let totalScore = 0, matchedCount = 0;
-  for (const src of srcTokens) {
-    let best = 0;
-    for (const tgt of tgtTokens) best = Math.max(best, scoreTokenPair(src, tgt));
-    if (best > 0) { totalScore += best; matchedCount++; }
+  // Single token (e.g. "Turkii") → match anywhere in target
+  if (srcTokens.length === 1) {
+    const best = Math.max(...tgtTokens.map(t => scoreTokenPair(srcTokens[0], t)));
+    return best >= 76 ? best : 0;
   }
-  const fullScore = matchedCount === 0 ? 0 :
-    Math.round((totalScore / matchedCount) * (0.65 + 0.35 * matchedCount / srcTokens.length));
 
-  // First+Last score — handles middle names (بن + father name)
-  let flScore = 0;
-  if (srcTokens.length >= 2 && tgtTokens.length >= 2) {
-    const sFL = [srcTokens[0], srcTokens[srcTokens.length - 1]];
-    const tFL = [tgtTokens[0], tgtTokens[tgtTokens.length - 1]];
-    let ft = 0, fc = 0;
-    for (const src of sFL) {
-      let best = 0;
-      for (const tgt of tFL) best = Math.max(best, scoreTokenPair(src, tgt));
-      if (best > 0) { ft += best; fc++; }
+  const srcFirst = srcTokens[0];
+  const srcLast  = srcTokens[srcTokens.length - 1];
+  const tgtFirst = tgtTokens[0];
+  const tgtLast  = tgtTokens[tgtTokens.length - 1];
+
+  // ── Case A: name + family (standard) ──
+  // First name matches first, family name matches last
+  const firstScore = scoreTokenPair(srcFirst, tgtFirst);
+  const lastScore  = scoreTokenPair(srcLast,  tgtLast);
+  const scoreA = firstScore === 0 && lastScore === 0 ? 0
+    : Math.round((lastScore * 0.55) + (firstScore * 0.45));
+
+  // ── Case B: name + father only (e.g. "خالد سليمان" → "خالد بن سليمان الرويشد") ──
+  // First name matches first, src last token matches one of the middle tokens (father)
+  let scoreB = 0;
+  if (tgtTokens.length >= 3) {
+    const tgtMids = tgtTokens.slice(1, -1); // father name(s) in roster
+    const fatherMatch = Math.max(...tgtMids.map(t => scoreTokenPair(srcLast, t)));
+    if (firstScore > 0 && fatherMatch > 0) {
+      // Slight penalty vs full match since family name not confirmed
+      scoreB = Math.round(((firstScore * 0.50) + (fatherMatch * 0.50)) * 0.88);
     }
-    if (fc === 2) flScore = Math.round((ft / 2) * 0.92);
   }
 
-  return Math.max(fullScore, flScore);
+  return Math.max(scoreA, scoreB);
 }
 
 // ── Match one raw name against roster ──
