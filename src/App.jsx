@@ -112,7 +112,7 @@ async function analyzePeriod(images,roster,periodPresent=[]){
   (data.present||[]).forEach(p=>{
     if(p&&p.num){
       present[p.num]=p.rawName||"";
-      scores[p.num]=p.score||100;
+      scores[parseInt(p.num)]=p.score||100;
     }
   });
   return{present,scores,uncertain:data.uncertain||[],outOfList:data.outOfList||[],flags:data.flags||[]};
@@ -170,7 +170,7 @@ export default function App(){
     const rawP2=p2Present[m.id]||"";
     const evidence=[rawP1,rawP2].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(" / ");
     // Confidence: take the max score across both periods; overrides = 100 (manual = certain)
-    const autoScore=Math.max(p1.scores?.[m.id]||0, p2.scores?.[m.id]||0);
+    const autoScore=Math.max(p1.scores?.[m.id]||p1.scores?.[String(m.id)]||0, p2.scores?.[m.id]||p2.scores?.[String(m.id)]||0);
     const confidence=o.p1!==undefined||o.p2!==undefined ? 100 : autoScore;
     return{...m,inP1,inP2,present:inP1||inP2,evidence,confidence};
   }),[roster,p1Present,p2Present,p1,p2,overrides]);
