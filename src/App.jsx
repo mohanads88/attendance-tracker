@@ -138,6 +138,7 @@ export default function App(){
   const[roster,setRoster]=useState(DEFAULT_ROSTER);
   const[loaded,setLoaded]=useState(false);
   const[offline,setOffline]=useState(false);
+  const[meetingInfo,setMeetingInfo]=useState({num:"",day:"",date:"",time:""});
   const[p1,setP1]=useState(EMPTY_PERIOD);
   const[p2,setP2]=useState(EMPTY_PERIOD);
   const[overrides,setOverrides]=useState({});
@@ -244,8 +245,8 @@ export default function App(){
       </nav>
 
       <main style={{maxWidth:1100,margin:"0 auto",padding:"22px 16px 60px"}}>
-        {tab==="analyze"&&<AnalyzeTab roster={roster} p1={p1} setP1={setP1} p2={p2} setP2={setP2} p1Present={p1Present} p1Done={p1Done} onDone={()=>setTab("results")}/>}
-        {tab==="results"&&<ResultsTab merged={merged} stats={stats} extraAttendees={extraAttendees} setOverride={setOverride} p1={p1} p2={p2} roster={roster} onGoAnalyze={()=>setTab("analyze")}/>}
+        {tab==="analyze"&&<AnalyzeTab roster={roster} p1={p1} setP1={setP1} p2={p2} setP2={setP2} p1Present={p1Present} p1Done={p1Done} meetingInfo={meetingInfo} setMeetingInfo={setMeetingInfo} onDone={()=>setTab("results")}/>}
+        {tab==="results"&&<ResultsTab merged={merged} stats={stats} extraAttendees={extraAttendees} setOverride={setOverride} p1={p1} p2={p2} roster={roster} meetingInfo={meetingInfo} onGoAnalyze={()=>setTab("analyze")}/>}
         {tab==="roster"&&<RosterTab roster={roster} persist={persist}/>}
       </main>
     </div>
@@ -253,9 +254,38 @@ export default function App(){
 }
 
 // ======================== Analyze Tab ========================
-function AnalyzeTab({roster,p1,setP1,p2,setP2,p1Present,p1Done,onDone}){
+function AnalyzeTab({roster,p1,setP1,p2,setP2,p1Present,p1Done,meetingInfo,setMeetingInfo,onDone}){
+  const DAYS=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
   return(
     <div>
+      {/* Meeting Info */}
+      <div style={{...card,marginBottom:20}}>
+        <h3 style={{margin:"0 0 14px",fontSize:16,fontWeight:800,color:C.ink}}>معلومات الاجتماع</h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
+          <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:13,color:C.muted,fontWeight:600}}>
+            رقم الاجتماع
+            <input value={meetingInfo.num} onChange={e=>setMeetingInfo(m=>({...m,num:e.target.value}))}
+              placeholder="مثال: 12" style={inp}/>
+          </label>
+          <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:13,color:C.muted,fontWeight:600}}>
+            اليوم
+            <select value={meetingInfo.day} onChange={e=>setMeetingInfo(m=>({...m,day:e.target.value}))} style={inp}>
+              <option value="">اختر اليوم</option>
+              {DAYS.map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+          </label>
+          <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:13,color:C.muted,fontWeight:600}}>
+            التاريخ
+            <input type="date" value={meetingInfo.date} onChange={e=>setMeetingInfo(m=>({...m,date:e.target.value}))}
+              style={inp}/>
+          </label>
+          <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:13,color:C.muted,fontWeight:600}}>
+            الوقت
+            <input type="time" value={meetingInfo.time} onChange={e=>setMeetingInfo(m=>({...m,time:e.target.value}))}
+              style={inp}/>
+          </label>
+        </div>
+      </div>
       <StepHeader n={1} label="الفترة الأولى" done={p1Done}/>
       <PeriodCard state={p1} setState={setP1} roster={roster} previousPresent={[]}/>
       {p1.analyzed&&p1.uncertain.length>0&&<UncertainResolver period={p1} setPeriod={setP1} roster={roster}/>}
@@ -425,10 +455,15 @@ function UncertainResolver({period,setPeriod,roster}){
 }
 
 // ======================== Results Tab ========================
-function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAnalyze}){
+function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetingInfo,onGoAnalyze}){
   const[filter,setFilter]=useState("all");
   const[showExtra,setShowExtra]=useState(false);
   const noData=!p1.analyzed&&!p2.analyzed;
+  const hasBoth=p1.analyzed&&p2.analyzed;
+  const periodLabel=hasBoth?"الفترتان":"الفترة الأولى فقط";
+  const dateFormatted=meetingInfo.date
+    ? new Date(meetingInfo.date).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"})
+    : "";
 
   // "needs review": present but confidence < 90, or manually overridden
   const needsReviewCount=useMemo(()=>
@@ -446,14 +481,34 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
     const wb=XLSX.utils.book_new();
     wb.Workbook={Views:[{RTL:true}]};
 
+    // Determine which periods are included
+    const hasBoth=p1.analyzed&&p2.analyzed;
+    const periodLabel=hasBoth?"الفترة الأولى والثانية":"الفترة الأولى";
+
+    // Format date
+    const dateFormatted=meetingInfo.date
+      ? new Date(meetingInfo.date).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"})
+      : "";
+
     // Sheet 1: Main roster
+    const meetingHeader=[
+      ["رقم الاجتماع", meetingInfo.num||"—"],
+      ["اليوم", meetingInfo.day||"—"],
+      ["التاريخ", dateFormatted||"—"],
+      ["الوقت", meetingInfo.time||"—"],
+      ["الفترة", periodLabel],
+      [],
+    ];
     const h1=["م","الاسم","المنصب","الفترة الأولى","الفترة الثانية","الحالة","الاسم في اللقطة"];
     const body=merged.map(m=>[m.id,m.name,m.position,m.inP1?"حضر":"—",m.inP2?"حضر":"—",m.present?"حضر":"لم يحضر",m.evidence||""]);
     const summary=[[],["الملخص"],["إجمالي المدعوين",stats.total],["الحاضرون",stats.present],["الغائبون",stats.absent],["حضر في الفترتين",stats.both],["الفترة الأولى فقط",stats.only1],["الفترة الثانية فقط",stats.only2],["نسبة الحضور",stats.pct/100]];
-    const ws1=XLSX.utils.aoa_to_sheet([h1,...body,...summary]);
+    const ws1=XLSX.utils.aoa_to_sheet([...meetingHeader,h1,...body,...summary]);
     ws1["!cols"]=[{wch:5},{wch:32},{wch:42},{wch:12},{wch:12},{wch:10},{wch:34}];
-    const pctCell=`B${1+body.length+10}`;if(ws1[pctCell])ws1[pctCell].z="0.0%";
-    XLSX.utils.book_append_sheet(wb,ws1,"قائمة المدعوين");
+    const pctCell=`B${meetingHeader.length+1+body.length+10}`;if(ws1[pctCell])ws1[pctCell].z="0.0%";
+
+    // Sheet name includes meeting number
+    const sheetName=meetingInfo.num?`اجتماع ${meetingInfo.num}`:"قائمة المدعوين";
+    XLSX.utils.book_append_sheet(wb,ws1,sheetName);
 
     // Sheet 2: Extra attendees
     if(extraAttendees.length>0){
@@ -464,11 +519,24 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,onGoAn
       XLSX.utils.book_append_sheet(wb,ws2,"حضور إضافي");
     }
 
-    XLSX.writeFile(wb,"كشف_حضور_الاجتماع.xlsx");
+    const filename=meetingInfo.num
+      ? `كشف_حضور_اجتماع_${meetingInfo.num}.xlsx`
+      : "كشف_حضور_الاجتماع.xlsx";
+    XLSX.writeFile(wb,filename);
   };
 
   return(
     <div>
+      {/* Meeting info banner */}
+      {(meetingInfo.num||meetingInfo.day||meetingInfo.date||meetingInfo.time)&&(
+        <div style={{background:C.greenSoft,border:`1px solid ${C.green}30`,borderRadius:14,padding:"12px 18px",marginBottom:16,display:"flex",flexWrap:"wrap",gap:16,alignItems:"center"}}>
+          {meetingInfo.num&&<span style={{fontSize:14,fontWeight:800,color:C.green}}>اجتماع رقم {meetingInfo.num}</span>}
+          {meetingInfo.day&&<span style={{fontSize:13,color:C.ink}}>📅 {meetingInfo.day}</span>}
+          {dateFormatted&&<span style={{fontSize:13,color:C.ink}}>{dateFormatted}</span>}
+          {meetingInfo.time&&<span style={{fontSize:13,color:C.ink}}>🕐 {meetingInfo.time}</span>}
+          <span style={{fontSize:13,color:C.muted,marginInlineStart:"auto"}}>📊 {periodLabel}</span>
+        </div>
+      )}
       {/* Stats — clickable filters */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:18}}>
         <Stat n={stats.present} label="حاضر من القائمة" color={C.present} bg={C.presentSoft} active={filter==="present"} onClick={()=>setFilter(f=>f==="present"?"all":"present")}/>
