@@ -484,134 +484,72 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
       ? new Date(meetingInfo.date).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"})
       : "";
 
-    // ── Colors ──
-    const GREEN_BG  = {argb:"FFe6f2ec"}; // present row
-    const RED_BG    = {argb:"FFf8e8e8"}; // absent row
-    const HEADER_BG = {argb:"FF084d39"}; // dark green header
-    const INFO_BG   = {argb:"FFf0f4f2"}; // meeting info rows
-    const WHITE     = {argb:"FFFFFFFF"};
-    const HEADER_FG = {argb:"FFFFFFFF"};
-    const GREEN_FG  = {argb:"FF0b6b4f"};
-    const RED_FG    = {argb:"FFb23b3b"};
-    const DARK_FG   = {argb:"FF0f2620"};
+    const wb=XLSX.utils.book_new();
+    wb.Workbook={Views:[{RTL:true}]};
 
-    const wb = new ExcelJS.Workbook();
-    wb.views = [{rightToLeft: true}];
-
-    // ════ Sheet 1: Roster ════
-    const ws = wb.addWorksheet(meetingInfo.num ? `اجتماع ${meetingInfo.num}` : "قائمة المدعوين", {
-      views: [{rightToLeft: true}]
-    });
-    ws.columns = [
-      {width:5},{width:32},{width:42},{width:12},{width:12},{width:12},{width:34}
+    // ── Sheet 1: Roster ──
+    const meetingRows=[
+      ["رقم الاجتماع", meetingInfo.num||"—","","","","",""],
+      ["اليوم",        meetingInfo.day||"—","","","","",""],
+      ["التاريخ",      dateFormatted||"—","","","","",""],
+      ["الوقت",        meetingInfo.time||"—","","","","",""],
+      ["الفترة",       periodLabel,"","","","",""],
+      ["","","","","","",""],
+    ];
+    const header=["م","الاسم","المنصب","الفترة الأولى","الفترة الثانية","الحالة","الاسم في اللقطة"];
+    const body=merged.map(m=>[m.id,m.name,m.position,m.inP1?"حضر":"—",m.inP2?"حضر":"—",m.present?"حضر":"لم يحضر",m.evidence||""]);
+    const summary=[
+      ["","","","","","",""],
+      ["الملخص","","","","","",""],
+      ["إجمالي المدعوين",stats.total,"","","","",""],
+      ["الحاضرون",stats.present,"","","","",""],
+      ["الغائبون",stats.absent,"","","","",""],
+      ["حضر في الفترتين",stats.both,"","","","",""],
+      ["الفترة الأولى فقط",stats.only1,"","","","",""],
+      ["الفترة الثانية فقط",stats.only2,"","","","",""],
+      ["نسبة الحضور",stats.pct/100,"","","","",""],
     ];
 
-    // Meeting info rows
-    const infoRows = [
-      ["رقم الاجتماع", meetingInfo.num||"—"],
-      ["اليوم",        meetingInfo.day||"—"],
-      ["التاريخ",      dateFormatted||"—"],
-      ["الوقت",        meetingInfo.time||"—"],
-      ["الفترة",       periodLabel],
+    const ws=XLSX.utils.aoa_to_sheet([...meetingRows,header,...body,...summary]);
+
+    // Column widths
+    ws["!cols"]=[{wch:5},{wch:32},{wch:42},{wch:12},{wch:12},{wch:12},{wch:34}];
+
+    // Row heights
+    ws["!rows"]=[
+      {hpt:18},{hpt:18},{hpt:18},{hpt:18},{hpt:18},{hpt:8}, // meeting info + spacer
+      {hpt:22}, // header
+      ...body.map(()=>({hpt:20})),
     ];
-    infoRows.forEach(([label, val]) => {
-      const row = ws.addRow(["", label, val]);
-      row.eachCell(cell => {
-        cell.fill = {type:"pattern",pattern:"solid",fgColor:INFO_BG};
-        cell.font = {name:"Arial",size:11,color:{argb:"FF084d39"}};
-        cell.border = {bottom:{style:"thin",color:{argb:"FFe2e0d8"}}};
-      });
-      row.getCell(2).font = {...row.getCell(2).font, bold:true};
-    });
-    ws.addRow([]); // spacer
 
-    // Header row
-    const headerRow = ws.addRow(["م","الاسم","المنصب","الفترة الأولى","الفترة الثانية","الحالة","الاسم في اللقطة"]);
-    headerRow.eachCell(cell => {
-      cell.fill   = {type:"pattern",pattern:"solid",fgColor:HEADER_BG};
-      cell.font   = {name:"Arial",size:11,bold:true,color:HEADER_FG};
-      cell.alignment = {horizontal:"center",vertical:"middle",readingOrder:"rtl"};
-      cell.border = {
-        top:{style:"thin",color:WHITE}, bottom:{style:"thin",color:WHITE},
-        left:{style:"thin",color:WHITE}, right:{style:"thin",color:WHITE}
-      };
-    });
-    headerRow.height = 22;
+    // Format percentage cell
+    const pctRow=meetingRows.length+1+body.length+9;
+    const pctCell=`B${pctRow}`;
+    if(ws[pctCell]) ws[pctCell].z="0.0%";
 
-    // Data rows
-    merged.forEach(m => {
-      const row = ws.addRow([
-        m.id, m.name, m.position,
-        m.inP1?"حضر":"—", m.inP2?"حضر":"—",
-        m.present?"حضر":"لم يحضر",
-        m.evidence||""
-      ]);
-      const bg = m.present ? GREEN_BG : RED_BG;
-      row.eachCell(cell => {
-        cell.fill = {type:"pattern",pattern:"solid",fgColor:bg};
-        cell.font = {name:"Arial",size:10,color:DARK_FG};
-        cell.alignment = {vertical:"middle",readingOrder:"rtl"};
-        cell.border = {bottom:{style:"thin",color:{argb:"FFe2e0d8"}}};
-      });
-      // Status cell colored
-      const statusCell = row.getCell(6);
-      statusCell.font = {...statusCell.font, bold:true, color: m.present ? GREEN_FG : RED_FG};
-      statusCell.alignment = {horizontal:"center",vertical:"middle"};
-      // Number cell centered
-      row.getCell(1).alignment = {horizontal:"center",vertical:"middle"};
-      row.height = 20;
+    // Style meeting info rows (bold labels)
+    meetingRows.forEach((_,i)=>{
+      const cell=ws[XLSX.utils.encode_cell({r:i,c:0})];
+      if(cell) cell.s={font:{bold:true}};
     });
 
-    // Summary
-    ws.addRow([]);
-    const summaryData = [
-      ["الملخص",""],
-      ["إجمالي المدعوين", stats.total],
-      ["الحاضرون",        stats.present],
-      ["الغائبون",        stats.absent],
-      ["حضر في الفترتين",stats.both],
-      ["الفترة الأولى فقط", stats.only1],
-      ["الفترة الثانية فقط",stats.only2],
-      ["نسبة الحضور",    `${stats.pct}%`],
-    ];
-    summaryData.forEach(([label,val],i)=>{
-      const row=ws.addRow(["",label,val]);
-      row.eachCell(cell=>{
-        cell.font={name:"Arial",size:10,bold:i===0,color:{argb:i===0?"FF084d39":"FF0f2620"}};
-        cell.fill={type:"pattern",pattern:"solid",fgColor:i===0?INFO_BG:{argb:"FFfafaf8"}};
-      });
-    });
+    const sheetName=meetingInfo.num?`اجتماع ${meetingInfo.num}`:"قائمة المدعوين";
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
 
-    // ════ Sheet 2: Extra attendees ════
+    // ── Sheet 2: Extra attendees ──
     if(extraAttendees.length>0){
-      const ws2=wb.addWorksheet("حضور إضافي",{views:[{rightToLeft:true}]});
-      ws2.columns=[{width:5},{width:42}];
-      const h2=ws2.addRow(["م","الاسم (كما ظهر في اللقطة)"]);
-      h2.eachCell(cell=>{
-        cell.fill={type:"pattern",pattern:"solid",fgColor:HEADER_BG};
-        cell.font={name:"Arial",size:11,bold:true,color:HEADER_FG};
-        cell.alignment={horizontal:"center",vertical:"middle"};
-      });
-      extraAttendees.forEach((n,i)=>{
-        const row=ws2.addRow([i+1,n]);
-        row.eachCell(cell=>{
-          cell.font={name:"Arial",size:10};
-          cell.border={bottom:{style:"thin",color:{argb:"FFe2e0d8"}}};
-        });
-        row.getCell(1).alignment={horizontal:"center"};
-      });
+      const h2=["م","الاسم (كما ظهر في اللقطة)"];
+      const b2=extraAttendees.map((n,i)=>[i+1,n]);
+      const ws2=XLSX.utils.aoa_to_sheet([h2,...b2]);
+      ws2["!cols"]=[{wch:5},{wch:42}];
+      wb.Workbook.Views=[{RTL:true}];
+      XLSX.utils.book_append_sheet(wb,ws2,"حضور إضافي");
     }
 
-    // Save
-    wb.xlsx.writeBuffer().then(buffer=>{
-      const blob=new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;
-      a.download=meetingInfo.num?`كشف_حضور_اجتماع_${meetingInfo.num}.xlsx`:"كشف_حضور_الاجتماع.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
-    });
+    const filename=meetingInfo.num
+      ? `كشف_حضور_اجتماع_${meetingInfo.num}.xlsx`
+      : "كشف_حضور_الاجتماع.xlsx";
+    XLSX.writeFile(wb,filename);
   };
 
   return(
