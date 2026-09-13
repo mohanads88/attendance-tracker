@@ -318,7 +318,7 @@ ${prevContext}
         "Authorization": `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: "deepseek-vl2",
+        model: "deepseek-flash",
         max_tokens: 2048,
         messages: [{ role: "user", content }],
       }),
