@@ -257,8 +257,8 @@ function matchName(rawName, roster) {
 // ════════════════════════════════════════════════════════════
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: "ANTHROPIC_API_KEY غير مضبوط في إعدادات Vercel" });
+  const key = process.env.DEEPSEEK_API_KEY;
+  if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY غير مضبوط في إعدادات Vercel" });
 
   try {
     const body = req.body || {};
@@ -303,21 +303,22 @@ ${prevContext}
     const content = [
       { type: "text", text: extractPrompt },
       ...images.map(im => ({
-        type: "image",
-        source: { type: "base64", media_type: im.mimeType || "image/jpeg", data: im.data },
+        type: "image_url",
+        image_url: {
+          url: `data:${im.mimeType || "image/jpeg"};base64,${im.data}`,
+        },
       })),
       { type: "text", text: "اقرأ الأسماء بدقة وأعِد JSON فقط." },
     ];
 
-    const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+    const claudeResp = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "deepseek-vl2",
         max_tokens: 2048,
         messages: [{ role: "user", content }],
       }),
@@ -325,9 +326,9 @@ ${prevContext}
 
     const claudeData = await claudeResp.json();
     if (!claudeResp.ok)
-      return res.status(502).json({ error: "خطأ من خدمة Claude", detail: claudeData?.error?.message || "" });
+      return res.status(502).json({ error: "خطأ من خدمة Deepseek", detail: claudeData?.error?.message || "" });
 
-    const rawText  = (claudeData.content || []).map(b => b.type === "text" ? b.text : "").join("").trim();
+    const rawText = (claudeData.choices?.[0]?.message?.content || "").trim();
     const cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
     const s = cleanText.indexOf("{"), e = cleanText.lastIndexOf("}");
     if (s === -1 || e === -1)
