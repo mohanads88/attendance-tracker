@@ -133,11 +133,73 @@ function pendingUncertain(period){
   return(period.uncertain||[]).filter(u=>(period.resolved||{})[u.rawName]===undefined);
 }
 
+
+// ======================== Login Screen ========================
+function LoginScreen({onAuth}){
+  const[pwd,setPwd]=useState("");
+  const[error,setError]=useState(false);
+  const[loading,setLoading]=useState(false);
+
+  const handleSubmit=async()=>{
+    if(!pwd.trim()) return;
+    setLoading(true);
+    try{
+      const resp=await fetch("/api/auth",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({password:pwd}),
+      });
+      if(resp.ok){ onAuth(); }
+      else{ setError(true); setPwd(""); }
+    }catch(e){ setError(true); }
+    setLoading(false);
+  };
+
+  return(
+    <div dir="rtl" style={{fontFamily:FONT,minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:20,padding:"40px 36px",width:"100%",maxWidth:380,textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
+        <div style={{width:56,height:56,borderRadius:16,background:`linear-gradient(120deg,${C.greenDark},${C.green})`,display:"grid",placeItems:"center",margin:"0 auto 20px"}}>
+          <ClipboardList size={28} color="#fff"/>
+        </div>
+        <h1 style={{fontSize:22,fontWeight:800,color:C.ink,margin:"0 0 6px"}}>راصد الحضور</h1>
+        <p style={{fontSize:14,color:C.muted,margin:"0 0 28px"}}>أدخل رمز الدخول للمتابعة</p>
+
+        <input
+          type="password"
+          value={pwd}
+          onChange={e=>{setPwd(e.target.value);setError(false);}}
+          onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+          placeholder="رمز الدخول"
+          autoFocus
+          style={{
+            width:"100%",padding:"12px 16px",fontSize:16,textAlign:"center",
+            border:`2px solid ${error?C.absent:C.line}`,borderRadius:12,
+            outline:"none",fontFamily:FONT,marginBottom:12,
+            background:error?C.absentSoft:"#fff",
+            transition:"border-color 0.2s",
+          }}
+        />
+
+        {error&&<div style={{color:C.absent,fontSize:13,marginBottom:12,fontWeight:600}}>رمز الدخول غير صحيح</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={loading||!pwd.trim()}
+          style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:16,padding:"12px",opacity:loading||!pwd.trim()?0.6:1}}
+        >
+          {loading?<><Loader2 size={18} style={{animation:"spin 1s linear infinite"}}/> جارٍ التحقق…</>:"دخول"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const[tab,setTab]=useState("analyze");
   const[roster,setRoster]=useState(DEFAULT_ROSTER);
   const[loaded,setLoaded]=useState(false);
   const[offline,setOffline]=useState(false);
+  const[authed,setAuthed]=useState(()=>sessionStorage.getItem("rased_auth")==="1");
   const[meetingInfo,setMeetingInfo]=useState({num:"",day:"",date:"",time:""});
   const[p1,setP1]=useState(EMPTY_PERIOD);
   const[p2,setP2]=useState(EMPTY_PERIOD);
@@ -208,6 +270,7 @@ export default function App(){
   const p1Done=p1.analyzed&&p1Pending===0;
 
   if(!loaded) return<div dir="rtl" style={{fontFamily:FONT,padding:40,textAlign:"center",color:C.muted}}>جارٍ التحميل…</div>;
+  if(!authed) return<LoginScreen onAuth={()=>{sessionStorage.setItem("rased_auth","1");setAuthed(true);}}/>;
 
   return(
     <div dir="rtl" style={{fontFamily:FONT,background:C.bg,minHeight:"100vh",color:C.ink}}>
