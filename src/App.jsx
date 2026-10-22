@@ -6,63 +6,7 @@ import {
   RefreshCw, ChevronDown, ChevronUp, HelpCircle, CheckCircle2, UserPlus
 } from "lucide-react";
 import { loadRoster, saveRoster, watchRoster } from "./firebase";
-
-const DEFAULT_ROSTER = [
-  ["م. محمد بن عبد الله العقل","مساعد الأمين للقطاعات البلدية"],
-  ["م. خالد بن سليمان الرويشد","الرئيس التنفيذي لقطاع الأمانة وسط الرياض"],
-  ["م. محمد بن عبد الله الربيعة","الرئيس التنفيذي لقطاع الأمانة شمال الرياض"],
-  ["م. بندر بن عبد الله الحربي","الرئيس التنفيذي لقطاع الأمانة شرق الرياض"],
-  ["د. فلاح بن عبد الله الدوسري","الرئيس التنفيذي لقطاع الأمانة جنوب الرياض"],
-  ["م. عبد الله بن عبد المحسن الماضي","الرئيس التنفيذي لقطاع الأمانة غرب الرياض"],
-  ["د. فيصل بن سلطان العصيمي","وكيل الأمانة المساعد للتعمير"],
-  ["ماجد بن عثمان الدغفق","المشرف العام على مركز تجربة العميل"],
-  ["م. عبد العزيز بن أحمد بن عقيل","نائب الرئيس التنفيذي لقطاع الأمانة شمال الرياض"],
-  ["محمد بن إبراهيم السياري","نائب الرئيس التنفيذي لقطاع الأمانة وسط الرياض"],
-  ["هياء بنت عبد الله الماضي","نائب الرئيس التنفيذي لقطاع الأمانة جنوب الرياض"],
-  ["م. خلف بن ذعار الدلبحي","نائب الرئيس التنفيذي لقطاع الأمانة غرب الرياض"],
-  ["م. خالد بن عبدالعزيز العميري","نائب الرئيس التنفيذي لقطاع الأمانة شرق الرياض"],
-  ["م. محمد بن علي القحطاني","مستشار مركز تجربة العميل"],
-  ["معاذ بن سليمان العقيلي","مدير عام دعم القطاعات البلدية"],
-  ["م. فواز بن علي الغامدي","مدير عام تطوير القطاعات البلدية"],
-  ["هيفاء بنت حمدان النصار","مدير عام مكتب التميز التشغيلي"],
-  ["م. بندر بن بخيت الزهراني","مدير عام مكتب مدينتي المغرزات"],
-  ["د. بندر بن فهد الكريديس","مدير عام مكتب مدينتي المعذر"],
-  ["عبد الله بن محمد ال سويلم","مدير عام مكتب مدينتي المنصورة"],
-  ["مشاري بن عواد العنزي","مدير عام مكتب مدينتي طويق"],
-  ["د. لمياء بنت ناصر البكر","مدير عام مكتب مدينتي العقيق"],
-  ["م. عبد الله بن سعود الطلاسي","مدير عام مكتب مدينتي النفل"],
-  ["م. عبد الرحمن بن إبراهيم العجلان","مدير عام مكتب مدينتي قرطبة"],
-  ["خالد بن محمد القحطاني","مدير عام مكتب مدينتي الخليج"],
-  ["عبد الله بن نافع الشمري","مدير عام مكتب مدينتي السلام"],
-  ["خالد بن ابراهيم الذييب","مدير عام مكتب مدينتي الحائر"],
-  ["تغريد بنت عبد اللطيف فقيه","مدير عام مكتب مدينتي ظهرة لبن"],
-  ["محمد بن علي الأسمري","مدير عام مكتب مدينتي عكاظ"],
-  ["م. سعد بن عبد الله الدوسري","مدير عام تنمية المدينة - وسط الرياض"],
-  ["م. فيصل بن شائم العنزي","مدير عام الاستدامة البيئية - وسط الرياض"],
-  ["م. ماجد بن عبد الله السبيعي","مدير عام البنية التحتية - وسط الرياض"],
-  ["م. إبراهيم بن عبد العزيز البكري","مدير عام الرقابة - وسط الرياض"],
-  ["م. معنى بن محمد الفهد","مدير عام تنمية المدينة - غرب الرياض"],
-  ["م. قيس بن جميل العتيبي","مدير عام الاستدامة البيئية - غرب الرياض"],
-  ["م. مانع بن صالح كرحان","مدير عام البنية التحتية - غرب الرياض"],
-  ["نايف بن عبد الرحمن السبيعي","مدير عام الرقابة - غرب الرياض"],
-  ["م. تركي بن احمد الزهراني","مدير عام تنمية المدينة - شمال الرياض"],
-  ["م. أسامة بن حمد الدعيلج","مدير عام الاستدامة البيئية - شمال الرياض"],
-  ["م. زامل بن عوض الشمري","مدير عام البنية التحتية - شمال الرياض"],
-  ["م. محمد بن سليمان اليوسف","مدير عام الرقابة - شمال الرياض"],
-  ["م. يوسف بن صالح الزهراني","مدير عام تنمية المدينة - شرق الرياض"],
-  ["م. نايف بن إبراهيم العيسى","مدير عام الاستدامة البيئية - شرق الرياض"],
-  ["م. محمد بن يحيى القحطاني","مدير عام البنية التحتية - شرق الرياض"],
-  ["م. أنيس بن زامل بركاتي","مدير عام الرقابة - شرق الرياض"],
-  ["م. سلطان بن محمد باوزير","مدير عام تنمية المدينة - جنوب الرياض"],
-  ["م. يحيى بن موسى عتيق","مدير عام الاستدامة البيئية - جنوب الرياض"],
-  ["م. نمر بن قزعان العتيبي","مدير عام البنية التحتية - جنوب الرياض"],
-  ["د. ماجد بن غانم المطيري","مدير عام الرقابة - جنوب الرياض"],
-  ["م. عبدالملك بن سليمان البراك","رئيس غرفة العمليات المشتركة"],
-  ["م. عبدالله بن عبدالرحمن النصيان","مدير مكتب التحول البلدي"],
-  ["م. أحمد بن اشريدة الرويلي","مدير إدارة الموائمة التشغيلية"],
-  ["م. بندر بن عبد العزيز الكثيري","وكالة التحول الرقمي والمدن الذكية"],
-  ["مهدي بن هادي آل حيدر","ممثل الوكالة المساعدة للمشاركة المجتمعية"],
-].map(([name,position],i)=>({id:i+1,name,position}));
+import { DEFAULT_ROSTER } from "./roster";
 
 const C={
   ink:"#0f2620",green:"#0b6b4f",greenDark:"#084d39",greenSoft:"#e6f2ec",
@@ -93,19 +37,37 @@ async function fileToImage(file){
   return{name:file.name,dataUrl,b64:dataUrl.split(",")[1],mediaType:"image/jpeg"};
 }
 
+// ── Session token (issued by /api/auth, required by /api/analyze) ──
+const TOKEN_KEY="rased_token";
+function getToken(){
+  try{
+    const t=sessionStorage.getItem(TOKEN_KEY)||"";
+    const exp=Number(t.split(".")[0]);
+    return exp&&exp>Date.now()?t:"";
+  }catch(e){return "";}
+}
+function setToken(t){try{sessionStorage.setItem(TOKEN_KEY,t);}catch(e){}}
+function clearToken(){try{sessionStorage.removeItem(TOKEN_KEY);}catch(e){}}
+
 async function analyzePeriod(images,roster,periodPresent=[]){
   const rosterText=roster.map(m=>`${m.id}. ${m.name} — ${m.position}`).join("\n");
   const rosterJson=roster.map(m=>({id:m.id,name:m.name,position:m.position}));
   const resp=await fetch("/api/analyze",{
     method:"POST",
-    headers:{"Content-Type":"application/json"},
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${getToken()}`},
     body:JSON.stringify({
       rosterText,rosterJson,
       images:images.map(im=>({mimeType:im.mediaType,data:im.b64})),
       previousPresent:periodPresent,
     }),
   });
-  const data=await resp.json();
+  const data=await resp.json().catch(()=>({}));
+  if(resp.status===401){
+    // session expired: show the login screen again (meeting state is kept)
+    clearToken();
+    window.dispatchEvent(new Event("rased-logout"));
+    throw new Error(data.error||"انتهت الجلسة — أدخل رمز الدخول مرة أخرى");
+  }
   if(!resp.ok) throw new Error(data.error||"فشل التحليل — تحقق من عدد اللقطات أو اتصالك بالإنترنت");
   const present={};
   const scores={};
@@ -149,7 +111,8 @@ function LoginScreen({onAuth}){
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({password:pwd}),
       });
-      if(resp.ok){ onAuth(); }
+      const data=await resp.json().catch(()=>({}));
+      if(resp.ok&&data.token){ onAuth(data.token); }
       else{ setError(true); setPwd(""); }
     }catch(e){ setError(true); }
     setLoading(false);
@@ -199,11 +162,17 @@ export default function App(){
   const[roster,setRoster]=useState(DEFAULT_ROSTER);
   const[loaded,setLoaded]=useState(false);
   const[offline,setOffline]=useState(false);
-  const[authed,setAuthed]=useState(()=>sessionStorage.getItem("rased_auth")==="1");
+  const[authed,setAuthed]=useState(()=>!!getToken());
   const[meetingInfo,setMeetingInfo]=useState({num:"",day:"",date:"",time:""});
   const[p1,setP1]=useState(EMPTY_PERIOD);
   const[p2,setP2]=useState(EMPTY_PERIOD);
   const[overrides,setOverrides]=useState({});
+
+  useEffect(()=>{
+    const onLogout=()=>setAuthed(false);
+    window.addEventListener("rased-logout",onLogout);
+    return()=>window.removeEventListener("rased-logout",onLogout);
+  },[]);
 
   useEffect(()=>{
     setLoaded(true);
@@ -270,7 +239,7 @@ export default function App(){
   const p1Done=p1.analyzed&&p1Pending===0;
 
   if(!loaded) return<div dir="rtl" style={{fontFamily:FONT,padding:40,textAlign:"center",color:C.muted}}>جارٍ التحميل…</div>;
-  if(!authed) return<LoginScreen onAuth={()=>{sessionStorage.setItem("rased_auth","1");setAuthed(true);}}/>;
+  if(!authed) return<LoginScreen onAuth={t=>{setToken(t);setAuthed(true);}}/>;
 
   return(
     <div dir="rtl" style={{fontFamily:FONT,background:C.bg,minHeight:"100vh",color:C.ink}}>
