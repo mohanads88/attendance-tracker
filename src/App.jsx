@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
+import { exportWord } from "./wordExport";
 import {
-  Users, ScanLine, ClipboardList, Plus, Trash2, Download, Loader2,
+  Users, ScanLine, ClipboardList, Plus, Trash2, Download, Loader2, FileText,
   Check, X, AlertTriangle, Upload, Pencil, RotateCcw, CloudOff,
   RefreshCw, ChevronDown, ChevronUp, HelpCircle, CheckCircle2, UserPlus
 } from "lucide-react";
@@ -509,6 +510,22 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
     return true;
   }),[merged,filter]);
 
+  const[wordBusy,setWordBusy]=useState(false);
+  const exportWordFile=async()=>{
+    setWordBusy(true);
+    try{
+      await exportWord({
+        members:merged.map(m=>({id:m.id,name:m.name,position:m.position,present:m.present})),
+        extra:extraAttendees,
+        info:{
+          num:meetingInfo.num, day:meetingInfo.day, date:dateFormatted, time:meetingInfo.time,
+          period:hasBoth?"الفترتان الأولى والثانية":"الفترة الأولى",
+        },
+      }, meetingInfo.num?`محضر_حضور_اجتماع_${meetingInfo.num}.docx`:"محضر_حضور_الاجتماع.docx");
+    }catch(e){ alert(e.message||"تعذّر إنشاء ملف Word"); }
+    setWordBusy(false);
+  };
+
   const exportExcel=()=>{
     const hasBoth=p1.analyzed&&p2.analyzed;
     const periodLabel=hasBoth?"الفترة الأولى والثانية":"الفترة الأولى";
@@ -612,6 +629,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
         </div>
         <div style={{display:"flex",gap:8,marginInlineStart:"auto"}}>
           <button onClick={onGoAnalyze} style={btnGhost}><RefreshCw size={15}/> تعديل اللقطات</button>
+          <button onClick={exportWordFile} disabled={noData||wordBusy} style={{...btnPrimary,background:C.blue,opacity:noData||wordBusy?0.5:1}}>{wordBusy?<Loader2 size={17} style={{animation:"spin 1s linear infinite"}}/>:<FileText size={17}/>} تصدير Word</button>
           <button onClick={exportExcel} disabled={noData} style={{...btnPrimary,opacity:noData?0.5:1}}><Download size={17}/> تصدير Excel</button>
         </div>
       </div>
