@@ -495,7 +495,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
   const hasBoth=p1.analyzed&&p2.analyzed;
   const periodLabel=hasBoth?"الفترتان":"الفترة الأولى فقط";
   const dateFormatted=meetingInfo.date
-    ? new Date(meetingInfo.date).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"})
+    ? new Date(meetingInfo.date+"T12:00:00").toLocaleDateString("ar-SA-u-ca-gregory-nu-latn",{year:"numeric",month:"long",day:"numeric"})
     : "";
 
   // "needs review": present but confidence < 90, or manually overridden
@@ -516,7 +516,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
     try{
       await exportWord({
         members:merged.map(m=>({id:m.id,name:m.name,position:m.position,present:m.present})),
-        extra:extraAttendees,
+        extra:[], // المحضر مطابق للنموذج: بدون جدول الحضور الإضافي
         info:{
           num:meetingInfo.num, day:meetingInfo.day, date:dateFormatted, time:meetingInfo.time,
           period:hasBoth?"الفترتان الأولى والثانية":"الفترة الأولى",
@@ -530,7 +530,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
     const hasBoth=p1.analyzed&&p2.analyzed;
     const periodLabel=hasBoth?"الفترة الأولى والثانية":"الفترة الأولى";
     const dateFormatted=meetingInfo.date
-      ? new Date(meetingInfo.date).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"})
+      ? new Date(meetingInfo.date+"T12:00:00").toLocaleDateString("ar-SA-u-ca-gregory-nu-latn",{year:"numeric",month:"long",day:"numeric"})
       : "";
 
     const wb=XLSX.utils.book_new();
