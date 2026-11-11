@@ -521,7 +521,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
           num:meetingInfo.num, day:meetingInfo.day, date:dateFormatted, time:meetingInfo.time,
           period:hasBoth?"الفترتان الأولى والثانية":"الفترة الأولى",
         },
-      }, meetingInfo.num?`محضر_حضور_اجتماع_${meetingInfo.num}.docx`:"محضر_حضور_الاجتماع.docx");
+      }, meetingInfo.num?`حضور اجتماع ${meetingInfo.num}.docx`:"حضور اجتماع.docx");
     }catch(e){ alert(e.message||"تعذّر إنشاء ملف Word"); }
     setWordBusy(false);
   };

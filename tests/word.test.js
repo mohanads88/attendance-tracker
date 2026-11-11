@@ -25,6 +25,7 @@ test("extra attendees and meeting info are written and escaped", () => {
   }));
   assert.ok(xml.includes("الحضور الإضافي"));
   assert.ok(xml.includes("A &amp; &lt;B&gt;"));
-  assert.ok(xml.includes("اجتماع رقم 83"));
+  assert.ok(xml.includes("حضور اجتماع 83"));
+  assert.ok(!xml.includes("<w:t>الحضور</w:t>"));
   assert.ok(!xml.includes("<!--"));
 });

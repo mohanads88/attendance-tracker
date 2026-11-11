@@ -23,8 +23,7 @@ function repeatRow(xml, marker, items, fill) {
 
 export function meetingInfoLine(info = {}) {
   const parts = [];
-  if (info.num) parts.push(`اجتماع رقم ${info.num}`);
-  if (info.day) parts.push(`يوم ${info.day}`);
+    if (info.day) parts.push(`يوم ${info.day}`);
   if (info.date) parts.push(`التاريخ ${info.date}`);
   if (info.time) parts.push(`الساعة ${info.time}`);
   if (info.period) parts.push(info.period);
@@ -37,6 +36,9 @@ export function meetingInfoLine(info = {}) {
  * @param {object} data  { members:[{id,name,position,present}], extra:[string], info:{num,day,date,time,period} }
  */
 export function fillDocumentXml(xml, { members = [], extra = [], info = {} }) {
+  // title bar: "حضور اجتماع N" when the meeting number is known
+  if (info.num) xml = xml.replace("<w:t>الحضور</w:t>", `<w:t>${esc(`حضور اجتماع ${info.num}`)}</w:t>`);
+
   // meeting info line (drop the paragraph when nothing was entered)
   const line = meetingInfoLine(info);
   if (line) xml = xml.replace("{{MEETING_INFO}}", esc(line));
