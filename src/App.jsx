@@ -9,12 +9,13 @@ import {
 import { loadRoster, saveRoster, watchRoster } from "./firebase";
 import { DEFAULT_ROSTER } from "./roster";
 
+// ألوان هوية أمانة منطقة الرياض (الأكواد المعتمدة) — الدرجات الفاتحة هي نفس اللون بشفافية
 const C={
-  ink:"#0f2620",green:"#0b6b4f",greenDark:"#084d39",greenSoft:"#e6f2ec",
-  gold:"#c8891b",goldSoft:"#fbf1dc",bg:"#f6f5f1",card:"#ffffff",line:"#e2e0d8",
-  present:"#0b6b4f",presentSoft:"#e6f2ec",absent:"#b23b3b",absentSoft:"#f8e8e8",
-  muted:"#6b6f6a",blue:"#1d6fa4",blueSoft:"#e8f2fa",orange:"#c05c00",orangeSoft:"#fdf0e6",
-  purple:"#5b3fa8",purpleSoft:"#f0ecff",
+  ink:"#424242",green:"#106946",greenDark:"#106946",greenSoft:"#10694616",
+  gold:"#EFA602",goldSoft:"#EFA60224",bg:"#E8E6E6",card:"#ffffff",line:"#E8E6E6",
+  present:"#106946",presentSoft:"#10694612",absent:"#B23B3B",absentSoft:"#B23B3B12",
+  muted:"#424242b3",blue:"#01686A",blueSoft:"#01686A14",orange:"#D97245",orangeSoft:"#D9724518",
+  purple:"#01686A",purpleSoft:"#1A92B31A",
 };
 const FONT=`'Bahij TheSansArabic', 'Tajawal', system-ui, sans-serif`;
 
@@ -121,8 +122,8 @@ function LoginScreen({onAuth}){
 
   return(
     <div dir="rtl" style={{fontFamily:FONT,minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:20,padding:"40px 36px",width:"100%",maxWidth:380,textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
-        <div style={{width:56,height:56,borderRadius:16,background:`linear-gradient(120deg,${C.greenDark},${C.green})`,display:"grid",placeItems:"center",margin:"0 auto 20px"}}>
+      <div style={{background:C.card,borderTop:`4px solid ${C.gold}`,borderRadius:20,padding:"40px 36px",width:"100%",maxWidth:380,textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
+        <div style={{width:56,height:56,borderRadius:16,background:C.green,display:"grid",placeItems:"center",margin:"0 auto 20px"}}>
           <ClipboardList size={28} color="#fff"/>
         </div>
         <h1 style={{fontSize:22,fontWeight:800,color:C.ink,margin:"0 0 6px"}}>راصد الحضور</h1>
@@ -248,9 +249,9 @@ export default function App(){
         *{box-sizing:border-box}button{font-family:inherit;cursor:pointer}input{font-family:inherit}
         @keyframes spin{to{transform:rotate(360deg)}}
         .row-hover:hover{filter:brightness(0.97)}
-        ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:#cfcdc4;border-radius:8px}`}</style>
+        ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:#42424255;border-radius:8px}`}</style>
 
-      <header style={{background:`linear-gradient(120deg,${C.greenDark},${C.green})`,color:"#fff",padding:"20px 22px"}}>
+      <header style={{background:C.green,color:"#fff",padding:"20px 22px",borderBottom:`4px solid ${C.gold}`}}>
         <div style={{maxWidth:1100,margin:"0 auto",display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:46,height:46,borderRadius:12,background:"rgba(255,255,255,0.14)",display:"grid",placeItems:"center"}}><ClipboardList size={24}/></div>
           <div style={{flex:1}}>
@@ -262,7 +263,7 @@ export default function App(){
         </div>
       </header>
 
-      <nav style={{background:C.card,borderBottom:`1px solid ${C.line}`,position:"sticky",top:0,zIndex:5}}>
+      <nav style={{background:C.card,boxShadow:"0 1px 3px rgba(66,66,66,0.12)",position:"sticky",top:0,zIndex:5}}>
         <div style={{maxWidth:1100,margin:"0 auto",display:"flex",gap:2,padding:"0 12px"}}>
           {[
             ["analyze","التحليل",ScanLine,totalPending>0?totalPending:null,"orange"],
@@ -448,7 +449,7 @@ function UncertainResolver({period,setPeriod,roster}){
       {pending.map((u,i)=>(
         <div key={i} style={{padding:"16px 18px",borderBottom:`1px solid ${C.line}`,background:"#fff"}}>
           <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
-            <span style={{background:"#f0f0ee",borderRadius:8,padding:"4px 10px",fontSize:14,fontWeight:700,color:C.ink,whiteSpace:"nowrap"}}>"{u.rawName}"</span>
+            <span style={{background:"#E8E6E6",borderRadius:8,padding:"4px 10px",fontSize:14,fontWeight:700,color:C.ink,whiteSpace:"nowrap"}}>"{u.rawName}"</span>
             <div>
               <div style={{fontSize:13,color:C.muted,marginBottom:3}}>{u.issue}</div>
               <div style={{fontSize:12,color:C.blue,fontWeight:600}}>{u.suggestedAction}</div>
@@ -470,13 +471,13 @@ function UncertainResolver({period,setPeriod,roster}){
             ))}
 
             <button onClick={()=>resolve(u.rawName,"outOfList")}
-              style={{display:"flex",alignItems:"center",gap:12,background:"#f5f5f3",border:`1.5px solid ${C.line}`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
+              style={{display:"flex",alignItems:"center",gap:12,background:"#E8E6E680",border:`1.5px solid ${C.line}`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:C.muted,color:"#fff",display:"grid",placeItems:"center",flexShrink:0}}><UserPlus size={14}/></div>
               <div style={{flex:1,fontWeight:600,fontSize:14,color:C.muted}}>ليس من المدعوين — أضفه لقائمة الحضور الإضافي</div>
             </button>
 
             <button onClick={()=>resolve(u.rawName,"skip")}
-              style={{display:"flex",alignItems:"center",gap:12,background:"#f5f5f3",border:`1.5px solid ${C.line}`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
+              style={{display:"flex",alignItems:"center",gap:12,background:"#E8E6E680",border:`1.5px solid ${C.line}`,borderRadius:10,padding:"10px 14px",textAlign:"right",cursor:"pointer"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:"#bbb",color:"#fff",display:"grid",placeItems:"center",flexShrink:0}}><X size={14}/></div>
               <div style={{flex:1,fontWeight:600,fontSize:14,color:C.muted}}>تجاهل</div>
             </button>
@@ -607,10 +608,10 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
       {(meetingInfo.num||meetingInfo.day||meetingInfo.date||meetingInfo.time)&&(
         <div style={{background:C.greenSoft,border:`1px solid ${C.green}30`,borderRadius:14,padding:"12px 18px",marginBottom:16,display:"flex",flexWrap:"wrap",gap:16,alignItems:"center"}}>
           {meetingInfo.num&&<span style={{fontSize:14,fontWeight:800,color:C.green}}>اجتماع رقم {meetingInfo.num}</span>}
-          {meetingInfo.day&&<span style={{fontSize:13,color:C.ink}}>📅 {meetingInfo.day}</span>}
+          {meetingInfo.day&&<span style={{fontSize:13,color:C.ink}}>{meetingInfo.day}</span>}
           {dateFormatted&&<span style={{fontSize:13,color:C.ink}}>{dateFormatted}</span>}
-          {meetingInfo.time&&<span style={{fontSize:13,color:C.ink}}>🕐 {meetingInfo.time}</span>}
-          <span style={{fontSize:13,color:C.muted,marginInlineStart:"auto"}}>📊 {periodLabel}</span>
+          {meetingInfo.time&&<span style={{fontSize:13,color:C.ink}}>الساعة {meetingInfo.time}</span>}
+          <span style={{fontSize:13,color:C.muted,marginInlineStart:"auto"}}>{periodLabel}</span>
         </div>
       )}
       {/* Stats — clickable filters */}
@@ -618,14 +619,14 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
         <Stat n={stats.present} label="حاضر من القائمة" color={C.present} bg={C.presentSoft} active={filter==="present"} onClick={()=>setFilter(f=>f==="present"?"all":"present")}/>
         <Stat n={stats.absent} label="غائب" color={C.absent} bg={C.absentSoft} active={filter==="absent"} onClick={()=>setFilter(f=>f==="absent"?"all":"absent")}/>
         <Stat n={`${stats.pct}%`} label="نسبة الحضور" color={C.gold} bg={C.goldSoft}/>
-        <Stat n={stats.total} label="إجمالي المدعوين" color={C.ink} bg="#eeece5" active={filter==="all"} onClick={()=>setFilter("all")}/>
+        <Stat n={stats.total} label="إجمالي المدعوين" color={C.ink} bg="#42424212" active={filter==="all"} onClick={()=>setFilter("all")}/>
         {needsReviewCount>0&&<Stat n={needsReviewCount} label="يحتاج مراجعة" color={C.orange} bg={C.orangeSoft} active={filter==="review"} onClick={()=>setFilter(f=>f==="review"?"all":"review")}/>}
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
         <div style={{fontSize:13,color:C.muted}}>
           الفترتان <b style={{color:C.ink}}>{stats.both}</b> · الأولى فقط <b style={{color:C.ink}}>{stats.only1}</b> · الثانية فقط <b style={{color:C.ink}}>{stats.only2}</b>
-          {filter!=="all"&&<span style={{marginInlineStart:10,background:C.goldSoft,color:C.gold,borderRadius:12,padding:"2px 10px",fontSize:12}}>عرض: {filter==="present"?"الحاضرون":"الغائبون"} ({filtered.length})</span>}
+          {filter!=="all"&&<span style={{marginInlineStart:10,background:C.greenSoft,color:C.green,borderRadius:12,padding:"2px 10px",fontSize:12}}>عرض: {filter==="present"?"الحاضرون":"الغائبون"} ({filtered.length})</span>}
         </div>
         <div style={{display:"flex",gap:8,marginInlineStart:"auto"}}>
           <button onClick={onGoAnalyze} style={btnGhost}><RefreshCw size={15}/> تعديل اللقطات</button>
@@ -644,7 +645,7 @@ function ResultsTab({merged,stats,extraAttendees,setOverride,p1,p2,roster,meetin
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
             <thead>
-              <tr style={{background:"#f0f4f2"}}>
+              <tr style={{background:"#E8E6E6"}}>
                 <th style={{...th,width:42,color:C.muted}}>م</th>
                 <th style={th}>الاسم</th>
                 <th style={{...th,textAlign:"center",width:70}}>ف١</th>
@@ -719,7 +720,7 @@ function Toggle({on,onClick}){
   return<button onClick={onClick} style={{width:30,height:30,borderRadius:8,border:`1.5px solid ${on?C.present:C.line}`,background:on?C.present:"#fff",color:on?"#fff":C.line,display:"grid",placeItems:"center",transition:"all 0.15s"}}>{on?<Check size={16}/>:<X size={14}/>}</button>;
 }
 function Stat({n,label,color,bg,active,onClick}){
-  return<div onClick={onClick} style={{background:bg,borderRadius:14,padding:"16px 18px",cursor:onClick?"pointer":"default",outline:active?`2px solid ${color}`:"none",transition:"outline 0.15s"}}><div style={{fontSize:28,fontWeight:800,color,lineHeight:1}}>{n}</div><div style={{fontSize:13,color:C.muted,marginTop:6}}>{label}</div></div>;
+  return<div onClick={onClick} style={{background:"#fff",borderTop:`4px solid ${color}`,boxShadow:"0 1px 3px rgba(66,66,66,0.10)",borderRadius:14,padding:"14px 18px 16px",cursor:onClick?"pointer":"default",outline:active?`2px solid ${color}`:"none",transition:"outline 0.15s"}}><div style={{fontSize:28,fontWeight:800,color,lineHeight:1}}>{n}</div><div style={{fontSize:13,color:C.muted,marginTop:6}}>{label}</div></div>;
 }
 
 // ======================== Roster Tab ========================
@@ -794,7 +795,7 @@ function RosterTab({roster,persist}){
                 onDragEnd={onDragEnd}
                 style={{
                   borderBottom:`1px solid ${C.line}`,
-                  background:dragOverIdx===idx?"#e8f4ee":dragIdx===idx?"#f5f5f3":"#fff",
+                  background:dragOverIdx===idx?"#10694618":dragIdx===idx?"#E8E6E680":"#fff",
                   transition:"background 0.15s",
                   opacity:dragIdx===idx?0.5:1,
                 }}>
@@ -827,7 +828,7 @@ function RosterTab({roster,persist}){
   );
 }
 
-const card={background:C.card,border:`1px solid ${C.line}`,borderRadius:16,padding:18};
+const card={background:C.card,borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(66,66,66,0.10)"};
 const th={textAlign:"right",padding:"11px 12px",fontWeight:700,fontSize:13};
 const td={padding:"10px 12px",verticalAlign:"middle"};
 const inp={width:"100%",padding:"7px 9px",border:`1px solid ${C.line}`,borderRadius:8,fontSize:14};
