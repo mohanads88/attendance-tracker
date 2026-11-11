@@ -123,9 +123,7 @@ function LoginScreen({onAuth}){
   return(
     <div dir="rtl" style={{fontFamily:FONT,minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.card,borderTop:`4px solid ${C.gold}`,borderRadius:20,padding:"40px 36px",width:"100%",maxWidth:380,textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
-        <div style={{width:56,height:56,borderRadius:16,background:C.green,display:"grid",placeItems:"center",margin:"0 auto 20px"}}>
-          <ClipboardList size={28} color="#fff"/>
-        </div>
+        <img src="/logo.png" alt="أمانة منطقة الرياض" style={{height:104,display:"block",margin:"0 auto 18px"}}/>
         <h1 style={{fontSize:22,fontWeight:800,color:C.ink,margin:"0 0 6px"}}>راصد الحضور</h1>
         <p style={{fontSize:14,color:C.muted,margin:"0 0 28px"}}>أدخل رمز الدخول للمتابعة</p>
 
@@ -253,7 +251,7 @@ export default function App(){
 
       <header style={{background:C.green,color:"#fff",padding:"20px 22px",borderBottom:`4px solid ${C.gold}`}}>
         <div style={{maxWidth:1100,margin:"0 auto",display:"flex",alignItems:"center",gap:14}}>
-          <div style={{width:46,height:46,borderRadius:12,background:"rgba(255,255,255,0.14)",display:"grid",placeItems:"center"}}><ClipboardList size={24}/></div>
+          <div style={{background:"#fff",borderRadius:12,padding:"6px 12px",display:"grid",placeItems:"center"}}><img src="/logo.png" alt="أمانة منطقة الرياض" style={{height:56,display:"block"}}/></div>
           <div style={{flex:1}}>
             <h1 style={{margin:0,fontSize:22,fontWeight:800}}>راصد الحضور</h1>
             <p style={{margin:"2px 0 0",fontSize:13,opacity:0.85}}>مطابقة ذكية للقطات الاجتماع مع قائمة المدعوين</p>
